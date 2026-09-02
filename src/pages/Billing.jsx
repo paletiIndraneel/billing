@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getSetting, getNextInvoiceNumber } from '../db/db';
 import { adjustStock } from '../services/stockService';
-import { Download, Plus, Trash2, Eye, FileText, CheckCircle, Palette, List, Bell, Save, Printer } from 'lucide-react';
+import { Download, Plus, Trash2, Eye, FileText, CheckCircle, List, Bell, Printer } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
@@ -478,6 +478,8 @@ export default function Billing() {
   const [quantityStr, setQuantityStr] = useState('1');
   // savedInvoice: populated after Save Invoice — enables Print buttons
   const [savedInvoice, setSavedInvoice] = useState(null);
+  // previewUrl: blob URL of the PDF shown in the preview modal; null = closed
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [shipping, setShipping] = useState('');
   const [discountPct, setDiscountPct] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -928,10 +930,88 @@ export default function Billing() {
       setDraftId(null);
       setPayments([]);
       toast(`Invoice ${invoiceNumber} saved. Use the Print buttons below to generate your bill.`, 'success');
+      return { invoice: invoiceForPrint, party, lineItems, company, finalTaxType, defaultTheme: invoiceTheme || defaultTheme };
     } catch (err) {
       toast('Failed to save invoice: ' + err.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Build a non-persisted invoice object shaped for buildPDF, from current form state
+  const buildDraftForPdf = (invoiceNumber) => {
+    const lineItems = invoiceItems.map(item => ({
+      name: item.name,
+      hsn: item.hsn,
+      unit: item.unit || 'PCS',
+      basePrice: item.basePrice,
+      rate: item.rate || item.basePrice,
+      qty: item.qty,
+      gstRate: item.gstRate,
+      itemDiscountPct: item.itemDiscountPct || 0,
+    }));
+    const invoice = {
+      invoiceNumber,
+      type: invoiceType,
+      date: new Date().toISOString(),
+      dueDate: dueDate || null,
+      discountPct: invDiscPct,
+      grossSubtotal: totals.gross,
+      itemDiscountAmt: totals.itemDiscountAmt,
+      discountAmt: totals.discountAmt,
+      subtotal: totals.subtotal,
+      taxAmount: totals.taxAmount,
+      shipping: shipAmt,
+      total: grandTotal,
+      status: paymentStatus,
+      notes: notes.trim() || null,
+      terms: terms.trim() || null,
+      lineItems,
+    };
+    return { invoice, lineItems };
+  };
+
+  const closePreview = () => {
+    setPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+  };
+
+  // Preview: render the current (unsaved) invoice as a PDF in a modal
+  const handlePreview = async () => {
+    const party = parties?.find(p => p.id.toString() === selectedParty);
+    if (!party) { toast('Select a customer/vendor first', 'warning'); return; }
+    if (invoiceItems.length === 0) { toast('Add at least one item', 'warning'); return; }
+    for (const item of invoiceItems) {
+      if (!item.qty || item.qty < 1) { toast(`Qty for "${item.name}" must be at least 1`, 'warning'); return; }
+    }
+    setSaving(true);
+    try {
+      const company = await getSetting('company', {});
+      const prefix = await getSetting('invoicePrefix', 'INV');
+      const seq = (await db.settings.get('invoiceSeq'))?.value || 0;
+      // read-only peek — do NOT call getNextInvoiceNumber (it increments the sequence)
+      const peekNumber = `${prefix}-${new Date().getFullYear()}-${String(seq + 1).padStart(4, '0')}`;
+      const { invoice, lineItems } = buildDraftForPdf(peekNumber);
+      const doc = await buildPDF(invoice, party, lineItems, company, invoiceTheme, taxType);
+      setPreviewUrl(doc.output('bloburl').toString());
+    } catch (err) {
+      toast('Preview failed: ' + err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Save & Print from the preview modal: persist, then open the print dialog for the real invoice
+  const handleSaveAndPrint = async () => {
+    const result = await handleSaveInvoice();
+    if (!result) return; // validation failed / error — toast already shown, keep modal open
+    closePreview();
+    try {
+      const doc = await buildPDF(result.invoice, result.party, result.lineItems, result.company, result.defaultTheme, result.finalTaxType);
+      doc.autoPrint();
+      const win = window.open(doc.output('bloburl'), '_blank');
+      if (!win) toast('Invoice saved. Allow pop-ups to print, or use the Tax Invoice PDF button.', 'warning');
+    } catch (err) {
+      toast('Saved, but printing failed: ' + err.message, 'error');
     }
   };
 
@@ -1857,28 +1937,6 @@ export default function Billing() {
                 </div>
               )}
 
-              {/* Theme Selector */}
-              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Palette size={13} /> PDF Theme
-                </div>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  {Object.entries(INVOICE_THEMES).map(([key, th]) => (
-                    <button key={key} type="button" onClick={() => setInvoiceTheme(key)}
-                      style={{
-                        flex: 1, padding: '0.4rem 0.25rem', fontSize: '0.7rem', fontWeight: 600,
-                        borderRadius: 6, border: `2px solid ${invoiceTheme === key ? `rgb(${th.primary.join(',')})` : 'var(--border)'}`,
-                        background: invoiceTheme === key ? `rgba(${th.primary.join(',')},0.1)` : 'transparent',
-                        color: invoiceTheme === key ? `rgb(${th.primary.join(',')})` : 'var(--text-muted)',
-                        cursor: 'pointer'
-                      }}
-                      title={th.name}>
-                      {th.name.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {draftId && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 6, padding: '0.375rem 0.75rem', marginTop: '0.75rem', textAlign: 'center' }}>
                   Editing Draft — finalise below or keep saving
@@ -1889,8 +1947,8 @@ export default function Billing() {
                   <button className="btn btn-secondary" style={{ flex: '0 0 auto', padding: '0.75rem 1rem' }} onClick={handleSaveDraft} disabled={saving} title="Save as draft (no stock change)">
                     Draft
                   </button>
-                  <button id="billing-save-btn" className="btn btn-primary" style={{ flex: 1, padding: '0.75rem' }} onClick={handleSaveInvoice} disabled={invoiceItems.length === 0 || !selectedParty || saving}>
-                    {saving ? 'Saving…' : <><Save size={16} /> Save Invoice</>}
+                  <button id="billing-save-btn" className="btn btn-primary" style={{ flex: 1, padding: '0.75rem' }} onClick={handlePreview} disabled={invoiceItems.length === 0 || !selectedParty || saving}>
+                    {saving ? 'Working…' : <><Eye size={16} /> Preview &amp; Print</>}
                   </button>
                 </div>
 
@@ -2127,6 +2185,23 @@ export default function Billing() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Invoice Preview Modal ── */}
+      {previewUrl && (
+        <Modal title="Invoice Preview" onClose={closePreview} size="lg">
+          <iframe
+            title="Invoice preview"
+            src={previewUrl}
+            style={{ width: '100%', height: '65vh', border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }}
+          />
+          <div className="modal-footer" style={{ padding: '1rem 0 0', border: 'none' }}>
+            <button className="btn btn-secondary" onClick={closePreview} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleSaveAndPrint} disabled={saving}>
+              {saving ? 'Saving…' : <><Printer size={16} /> Save &amp; Print</>}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {/* ── View Invoice Modal ── */}
