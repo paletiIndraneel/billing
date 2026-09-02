@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEntity } from '../api/useEntity';
+import { QK } from '../api/realtime';
+import { listExpenses, createExpense, updateExpense, deleteExpense as apiDeleteExpense } from '../api/expenses';
+import { createTransaction, updateTransaction, deleteTransaction, listTransactionsByExpense } from '../api/transactions';
 import { Plus, Trash2, Receipt, TrendingDown, Edit2, Download } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
@@ -39,7 +42,10 @@ function fmtDate(d) {
 }
 
 export default function Expenses() {
-  const expenses = useLiveQuery(() => db.expenses.orderBy('date').reverse().toArray());
+  const { rows: expenses, create: createExp, update: updateExp, remove: removeExp } = useEntity(QK.expenses, {
+    list: listExpenses, create: createExpense, update: updateExpense, remove: apiDeleteExpense,
+  });
+  const qc = useQueryClient();
 
   const [modal, setModal] = useState(null);
   const [filterCat, setFilterCat] = useState('All');
@@ -59,21 +65,28 @@ export default function Expenses() {
     try {
       if (data.id) {
         const { id, ...rest } = data;
-        await db.expenses.update(id, rest);
-        const linked = await db.transactions.filter(t => t.expenseId === id).first();
+        await updateExp(id, {
+          date: rest.date, category: rest.category, amount: rest.amount,
+          paymentMethod: rest.paymentMethod, vendorName: rest.vendorName, description: rest.description,
+        });
+        const linked = (await listTransactionsByExpense(id))[0];
         if (linked) {
-          await db.transactions.update(linked.id, {
+          await updateTransaction(linked.id, {
             date: rest.date, amount: rest.amount,
             method: rest.paymentMethod, notes: txnNote,
           });
+          qc.invalidateQueries({ queryKey: [QK.transactions] });
         }
         toast('Expense updated', 'success');
       } else {
-        const newId = await db.expenses.add(data);
-        await db.transactions.add({
+        const exp = await createExp({
+          date: data.date, category: data.category, amount: data.amount,
+          paymentMethod: data.paymentMethod, vendorName: data.vendorName, description: data.description,
+        });
+        await createTransaction({
           date: data.date,
           partyId: null,
-          expenseId: newId,
+          expenseId: exp.id,
           type: 'Expense',
           amount: data.amount,
           method: data.paymentMethod,
@@ -81,6 +94,7 @@ export default function Expenses() {
           notes: txnNote,
           autoRecorded: true,
         });
+        qc.invalidateQueries({ queryKey: [QK.transactions] });
         toast('Expense added', 'success');
       }
       setModal(null);
@@ -90,9 +104,12 @@ export default function Expenses() {
   };
 
   const deleteExpense = async (id) => {
-    await db.expenses.delete(id);
-    const linked = await db.transactions.filter(t => t.expenseId === id).first();
-    if (linked) await db.transactions.delete(linked.id);
+    await removeExp(id);
+    const linked = (await listTransactionsByExpense(id))[0];
+    if (linked) {
+      await deleteTransaction(linked.id);
+      qc.invalidateQueries({ queryKey: [QK.transactions] });
+    }
     setConfirmDeleteId(null);
     toast('Expense deleted', 'success');
   };
