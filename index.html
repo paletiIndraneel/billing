@@ -9,12 +9,23 @@
       script-src 'self' 'unsafe-inline';
       style-src 'self' 'unsafe-inline';
       img-src 'self' data: blob: https:;
+      frame-src 'self' blob:;
       connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.whatsapp.com;
       font-src 'self' data:;
       object-src 'none';
       base-uri 'self';
     " />
     <title>Lekhya One</title>
+    <script>
+      // Set theme before first paint to avoid flash
+      (function () {
+        var t = localStorage.getItem('lekhya_theme');
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

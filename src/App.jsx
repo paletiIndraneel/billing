@@ -1,5 +1,7 @@
 import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, RefreshCw, Sun, Moon } from 'lucide-react';
+import { resolveTheme, setTheme } from './lib/theme';
+import logo from './assets/logo.png';
 import { ToastProvider, useToast } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useEffect, useState } from 'react';
@@ -85,7 +87,18 @@ function PageTitle() {
   return titles[pathname] || 'Lekhya One';
 }
 
+function useTheme() {
+  const [theme, setThemeState] = useState(resolveTheme);
+  const toggle = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    setThemeState(next);
+  };
+  return [theme, toggle];
+}
+
 function AppLayout({ user, onLogout }) {
+  const [theme, toggleTheme] = useTheme();
   const [syncing, setSyncing] = useState(false);
   const online = useOnlineStatus();
   const toast = useToast();
@@ -107,9 +120,7 @@ function AppLayout({ user, onLogout }) {
     <div className="app-container">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <FileText size={18} />
-          </div>
+          <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }} />
           Lekhya One
         </div>
         <nav className="sidebar-nav">
@@ -122,7 +133,6 @@ function AppLayout({ user, onLogout }) {
           ))}
         </nav>
         <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          Offline-First · v1.0
         </div>
       </aside>
 
@@ -145,6 +155,14 @@ function AppLayout({ user, onLogout }) {
               }} />
               {online ? 'Online' : 'Offline'}
             </span>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '0.375rem 0.625rem', fontSize: '0.8rem' }}
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
             <button
               className="btn btn-secondary"
               style={{ padding: '0.375rem 0.625rem', fontSize: '0.8rem' }}

@@ -499,7 +499,7 @@ export default function Login({ onLogin, onBack }) {
           textAlign: 'center', marginTop: '2rem', fontSize: '0.75rem',
           color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '1rem',
         }}>
-          Lekhya One · Offline-First · v1.0
+          Lekhya One · zero
         </p>
       </div>
     </div>
