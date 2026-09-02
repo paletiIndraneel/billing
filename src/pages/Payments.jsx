@@ -374,7 +374,7 @@ export default function Payments() {
                     required
                     className="form-input"
                     placeholder="Search customer or vendor..."
-                    value={showPartyDropdown ? partySearch : (parties?.find(p => p.id === Number(paymentModal.data.partyId))?.name || '')}
+                    value={showPartyDropdown ? partySearch : (parties?.find(p => p.id === paymentModal.data.partyId)?.name || '')}
                     onChange={e => {
                       setPartySearch(e.target.value);
                       setField('partyId', '');
@@ -426,7 +426,7 @@ export default function Payments() {
                       <div
                         key={p.id}
                         onMouseDown={() => {
-                          setField('partyId', p.id.toString());
+                          setField('partyId', p.id);
                           setField('invoiceId', '');
                           setPartySearch(p.name);
                           setShowPartyDropdown(false);
@@ -456,7 +456,7 @@ export default function Payments() {
                 <label className="form-label">Link to Invoice (Optional)</label>
                 <select className="form-input" value={paymentModal.data.invoiceId} onChange={e => setField('invoiceId', e.target.value)}>
                   <option value="">— No specific invoice —</option>
-                  {invoices?.filter(i => String(i.partyId) === String(paymentModal.data.partyId) && (i.status === 'Pending' || i.status === 'Partial')).map(i => (
+                  {invoices?.filter(i => i.partyId === paymentModal.data.partyId && (i.status === 'Pending' || i.status === 'Partial')).map(i => (
                     <option key={i.id} value={i.id}>{i.invoiceNumber || `INV-${i.id}`} - ₹{i.total}</option>
                   ))}
                 </select>
