@@ -1,14 +1,19 @@
 import { supabase } from './_client';
 
-const TABLES = {
+export const TABLES = {
   parties: 'parties', products: 'products', product_variants: 'variants',
   invoices: 'invoices', invoice_items: 'invoiceItems', transactions: 'transactions',
   expenses: 'expenses', purchases: 'purchases', stock_ledger: 'stockLedger',
-  batches: 'batches', leads: 'leads', companies: 'company',
+  batches: 'batches', leads: 'leads',
 };
 
-// canonical query keys — pages MUST key useTable/useEntity on one of these
-export const QK = Object.fromEntries(Object.values(TABLES).map(k => [k, k]));
+// canonical query keys — pages MUST key useTable/useEntity on one of these.
+// `company` is here for 2b's Settings; it has no realtime subscription
+// (companies has no company_id column) — updateCompany invalidates it directly.
+export const QK = {
+  ...Object.fromEntries(Object.values(TABLES).map(k => [k, k])),
+  company: 'company',
+};
 
 let channel = null;
 
