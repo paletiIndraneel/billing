@@ -5,6 +5,8 @@ const fromRow = (r) => r && ({
   phone: r.phone, email: r.email, upiId: r.upi_id, logoUrl: r.logo_url,
   bankName: r.bank_name, bankAccount: r.bank_account, bankIfsc: r.bank_ifsc,
   invoicePrefix: r.invoice_prefix, invoiceSeq: r.invoice_seq,
+  defaultTerms: r.default_terms,
+  creditNoteSeq: r.credit_note_seq, debitNoteSeq: r.debit_note_seq,
 });
 
 const toRow = (d) => {
@@ -20,11 +22,17 @@ const toRow = (d) => {
   if ('bankAccount' in d) out.bank_account = d.bankAccount || null;
   if ('bankIfsc' in d) out.bank_ifsc = d.bankIfsc || null;
   if ('invoicePrefix' in d) out.invoice_prefix = d.invoicePrefix || 'INV';
+  if ('invoiceSeq' in d) out.invoice_seq = d.invoiceSeq ?? 0;
+  if ('defaultTerms' in d) out.default_terms = d.defaultTerms || null;
   return out;
 };
 
 export function formatInvoiceNumber(prefix, year, seq) {
   return `${prefix}-${year}-${String(seq).padStart(4, '0')}`;
+}
+
+export function formatNoteNumber(kind, year, seq) {
+  return `${kind === 'CreditNote' ? 'CN' : 'DN'}-${year}-${String(seq).padStart(4, '0')}`;
 }
 
 export const getCompany = async () =>
@@ -35,9 +43,22 @@ export const updateCompany = async (patch) =>
 
 export async function nextInvoiceNumber() {
   const co = await getCompany();
+  if (!co) throw new Error('No company');
   const seq = (co.invoiceSeq || 0) + 1;
   const number = formatInvoiceNumber(co.invoicePrefix || 'INV', new Date().getFullYear(), seq);
   const { error } = await q('companies').update({ invoice_seq: seq }).eq('id', cid());
+  if (error) throw new Error(error.message);
+  return number;
+}
+
+export async function nextNoteNumber(kind) {
+  const co = await getCompany();
+  if (!co) throw new Error('No company');
+  const col = kind === 'CreditNote' ? 'creditNoteSeq' : 'debitNoteSeq';
+  const seq = (co[col] || 0) + 1;
+  const number = formatNoteNumber(kind, new Date().getFullYear(), seq);
+  const dbcol = kind === 'CreditNote' ? 'credit_note_seq' : 'debit_note_seq';
+  const { error } = await q('companies').update({ [dbcol]: seq }).eq('id', cid());
   if (error) throw new Error(error.message);
   return number;
 }

@@ -6,6 +6,7 @@ export const fromRow = (r) => r && ({
   id: r.id,
   companyId: r.company_id,
   invoiceNumber: r.invoice_number,
+  refInvoiceNumber: r.ref_invoice_number,
   type: r.type,
   partyId: r.party_id,
   date: r.date,
@@ -31,6 +32,7 @@ export const fromRow = (r) => r && ({
 export const toRow = (d) => {
   const out = {};
   if ('invoiceNumber' in d) out.invoice_number = d.invoiceNumber;
+  if ('refInvoiceNumber' in d) out.ref_invoice_number = d.refInvoiceNumber || null;
   if ('type' in d) out.type = d.type;
   if ('partyId' in d) out.party_id = d.partyId || null;
   if ('date' in d) out.date = d.date;

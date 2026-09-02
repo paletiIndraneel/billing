@@ -9,7 +9,7 @@ Schema for the Lekhya web app. Single project: `lekhya-production`
 tool (migration name = the file's basename without extension), **not** the
 Supabase CLI. Files are kept here for version history and review.
 
-Order: `001_schema` → `002_rls` → `003_realtime`.
+Order: `001_schema` → `002_rls` → `003_realtime` → `004_columns`.
 
 There are no stored procedures / RPCs. Multi-table operations (invoice save,
 stock adjustment) run client-side with compensating cleanup — see
@@ -20,3 +20,4 @@ stock adjustment) run client-side with compensating cleanup — see
 - `001_schema` — applied to lekhya-production on 2026-09-02
 - `002_rls` — applied to lekhya-production on 2026-09-02
 - `003_realtime` — applied to lekhya-production on 2026-09-02 (publication + replica identity full for Realtime)
+- `004_columns` — applied to lekhya-production on 2026-09-02

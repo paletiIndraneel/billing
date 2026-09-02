@@ -13,6 +13,7 @@ export const fromRow = (r) => r && ({
   method: r.method,
   reference: r.reference,
   notes: r.notes,
+  expenseId: r.expense_id,
   autoRecorded: r.auto_recorded,
   createdAt: r.created_at,
 });
@@ -27,6 +28,7 @@ export const toRow = (d) => {
   if ('method' in d) out.method = d.method || null;
   if ('reference' in d) out.reference = d.reference || null;
   if ('notes' in d) out.notes = d.notes || null;
+  if ('expenseId' in d) out.expense_id = d.expenseId || null;
   if ('autoRecorded' in d) out.auto_recorded = d.autoRecorded ?? false;
   return out;
 };
@@ -42,6 +44,9 @@ export const listTransactionsByInvoice = async (invoiceId) =>
 
 export const getTransaction = async (id) =>
   fromRow(await one(q(TABLE).select('*').eq('id', id).maybeSingle()));
+
+export const listTransactionsByExpense = async (expenseId) =>
+  (await rows(q(TABLE).select('*').eq('expense_id', expenseId))).map(fromRow);
 
 export const createTransaction = async (data) =>
   fromRow(await one(
