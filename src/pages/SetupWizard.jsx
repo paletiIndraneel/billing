@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { setSetting, createUser } from '../db/db';
 import { supabase } from '../lib/supabase';
-import { ArrowRight, ArrowLeft, Check, Cloud, AlertCircle } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Cloud } from 'lucide-react';
 import logoUrl from '../assets/logo.png';
 import { useToast } from '../components/Toast';
 
@@ -35,9 +34,6 @@ export default function SetupWizard({ onComplete }) {
     setSaving(true);
     setCloudStatus('connecting');
     try {
-      // Save company info locally
-      await setSetting('company', company);
-
       // 1. Create Supabase account
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: account.email.trim(),
@@ -78,29 +74,11 @@ export default function SetupWizard({ onComplete }) {
       localStorage.setItem('lekhya_company_id', companyRow.id);
       setCloudStatus('ok');
 
-      // 5. Also create a local user for offline fallback
-      const username = account.username.trim() || account.email.split('@')[0];
-      await createUser(username, account.password, account.email);
-
       toast('Setup complete! Signing you in…', 'success');
       onComplete();
     } catch (err) {
-      // If Supabase fails (no internet), fall back to local-only setup
-      if (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed')) {
-        setCloudStatus('offline');
-        try {
-          await setSetting('company', company);
-          const username = account.username.trim() || account.email.split('@')[0];
-          await createUser(username, account.password, account.email);
-          toast('Setup complete in offline mode. Cloud sync will activate when internet is available.', 'success');
-          onComplete();
-        } catch (localErr) {
-          toast('Setup failed: ' + localErr.message, 'error');
-        }
-      } else {
-        setCloudStatus(null);
-        toast('Setup failed: ' + err.message, 'error');
-      }
+      setCloudStatus(null);
+      toast('Setup failed: ' + err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -188,7 +166,7 @@ export default function SetupWizard({ onComplete }) {
             {/* Cloud sync info banner */}
             <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(79,70,229,0.06)', border: '1px solid rgba(79,70,229,0.2)', borderRadius: 'var(--radius-sm)', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               <Cloud size={16} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 1 }} />
-              <span>Your account will sync data across Desktop and Android using the same email and password.</span>
+              <span>Access your account from any browser with this email and password.</span>
             </div>
 
             <div className="form-group">
@@ -218,13 +196,6 @@ export default function SetupWizard({ onComplete }) {
                 value={account.confirmPassword} onChange={e => setAccountField('confirmPassword', e.target.value)}
                 placeholder="Re-enter your password" />
             </div>
-
-            {cloudStatus === 'offline' && (
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.625rem 0.75rem', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--warning)' }}>
-                <AlertCircle size={14} />
-                No internet — setting up in offline mode. Cloud sync will activate automatically once connected.
-              </div>
-            )}
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setStep(0)} style={{ flex: 1, padding: '0.75rem' }}>
