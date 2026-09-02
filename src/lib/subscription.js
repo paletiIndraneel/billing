@@ -2,11 +2,14 @@
  * Lekhya One — Subscription Management
  *
  * Plans: trial (14 days) → basic / pro (annual / monthly)
- * Storage: settings table key 'subscription' (local-first, synced via Supabase)
+ * Storage: localStorage['lekhya_subscription'] (JSON); licenses validated via Supabase RPC
  * Grace period: 7 days after expiry before hard lock
  */
-import { db, getSetting, setSetting } from '../db/db';
 import { supabase } from './supabase';
+
+const KEY = 'lekhya_subscription';
+const readSub = () => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch { return null; } };
+const writeSub = (s) => localStorage.setItem(KEY, JSON.stringify(s));
 
 export const TRIAL_DAYS = 14;
 export const GRACE_DAYS = 7;
@@ -21,7 +24,7 @@ export const PLAN_LABELS = {
 
 /** Returns the locally-cached subscription or null if never initialized */
 export async function getSubscription() {
-  return getSetting('subscription', null);
+  return readSub();
 }
 
 /** Seeds a fresh 14-day trial if no subscription record exists */
@@ -37,7 +40,7 @@ export async function ensureTrialStarted() {
     expiresAt: new Date(now.getTime() + TRIAL_DAYS * 86400000).toISOString(),
     licenseKey: null,
   };
-  await setSetting('subscription', trial);
+  writeSub(trial);
   return trial;
 }
 
@@ -97,7 +100,7 @@ export async function activateLicense(licenseKey) {
       licenseKey: key,
       companyName: data.company_name || null,
     };
-    await setSetting('subscription', sub);
+    writeSub(sub);
     return { success: true, subscription: sub };
   } catch {
     // Network failure — can't validate online
@@ -123,7 +126,7 @@ export async function refreshSubscriptionStatus() {
         expiresAt: data.expires_at,
         plan: data.plan || sub.plan,
       };
-      await setSetting('subscription', updated);
+      writeSub(updated);
       return updated;
     }
   } catch { /* offline — use cached */ }
@@ -135,6 +138,6 @@ export async function refreshSubscriptionStatus() {
 export async function deactivateSubscription() {
   const sub = await getSubscription();
   const expired = { ...(sub || {}), status: 'suspended', expiresAt: new Date().toISOString() };
-  await setSetting('subscription', expired);
+  writeSub(expired);
   return expired;
 }
