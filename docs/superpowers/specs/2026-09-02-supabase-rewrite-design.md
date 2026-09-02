@@ -1,7 +1,7 @@
 # Remove offline: move Lekhya Web fully to Supabase
 
 **Date:** 2026-09-02
-**Status:** Approved (design) — pending spec review
+**Status:** Approved — atomic-ops approach revised to client-side best-effort (no RPCs) after deeper review of `stockService.js`
 **Scope:** Architectural. Deletes the offline-first data layer (Dexie/IndexedDB + sync engine + PWA + local auth) and rebuilds the app on a typed Supabase (Postgres) backend.
 
 ---
@@ -10,11 +10,11 @@
 
 The app was split from an Electron desktop build to a web app. It is still offline-first: **Dexie/IndexedDB is the entire data layer** (9 pages, 43 `useLiveQuery(db…)` read sites, plus `stockService.js`, `subscription.js`, `SetupWizard`, `Login`, `App`), reconciled to Supabase by `src/lib/syncEngine.js`. The Supabase schema today is a generic sync mirror — every table is `(id, company_id, data jsonb, last_modified, device_id, deleted)` with the real record dumped in `data`.
 
-**Target:** Supabase is the single source of truth. No IndexedDB, no sync engine, no PWA/service worker, no local auth fallback. Typed Postgres columns, uuid PKs, RLS per tenant, RPCs for atomic multi-table operations. First login = clean slate (existing placeholder rows wiped).
+**Target:** Supabase is the single source of truth. No IndexedDB, no sync engine, no PWA/service worker, no local auth fallback. Typed Postgres columns, uuid PKs, RLS per tenant. Multi-table operations run client-side, best-effort with compensating cleanup (no RPCs — see §4). First login = clean slate (existing placeholder rows wiped).
 
 **Decisions locked in brainstorming:**
 - Full typed rewrite (not an adapter shim).
-- Postgres RPC functions + SQL migrations are in scope; applied to project `lekhya-production` (`pfnlpatvjkjykvvswouz`).
+- SQL migrations (schema + RLS only) are in scope; applied to project `lekhya-production` (`pfnlpatvjkjykvvswouz`). No stored procedures / RPCs — atomic ops are client-side best-effort (§4).
 - Existing Supabase rows (4 parties, 3 invoices, 4 products, 4 variants) are placeholder → deleted. No local-data migration.
 - Reactivity via `@tanstack/react-query` + Supabase Realtime invalidation.
 
@@ -74,7 +74,7 @@ The `settings` key/value table (Dexie) is dropped. Its contents split by nature:
 | Old setting | New home |
 |---|---|
 | `company` (name, gstin, address, phone, email, upi_id, logo, bank_name, bank_account, bank_ifsc) | columns on `companies` |
-| `invoicePrefix`, `invoiceSeq` | `invoice_prefix text`, `invoice_seq int` columns on `companies`; mutated only via `next_invoice_number` RPC |
+| `invoicePrefix`, `invoiceSeq` | `invoice_prefix text`, `invoice_seq int` columns on `companies`; incremented by `nextInvoiceNumber()` in `src/api/company.js` (§4.3) |
 | `subscription` (trial cache) | `localStorage.lekhya_subscription` (per-browser) |
 | `invoiceTheme` | `localStorage.lekhya_theme_invoice` (per-browser UI pref) |
 
@@ -86,7 +86,7 @@ The `settings` key/value table (Dexie) is dropped. Its contents split by nature:
 
 ### 3.1 `src/api/` modules
 
-One module per entity: `parties.js`, `products.js`, `variants.js`, `invoices.js`, `invoiceItems.js`, `transactions.js`, `expenses.js`, `purchases.js`, `stockLedger.js`, `batches.js`, `leads.js`, `company.js`, plus `rpc.js` and `realtime.js`.
+One module per entity: `parties.js`, `products.js`, `variants.js`, `invoices.js`, `invoiceItems.js`, `transactions.js`, `expenses.js`, `purchases.js`, `stockLedger.js`, `batches.js`, `leads.js`, `company.js`, plus `_client.js`, `useTable.js`, and `realtime.js`.
 
 Each exports plain async functions:
 ```js
@@ -143,24 +143,42 @@ Wired in `App.jsx` after auth; torn down on logout. This is the entire replaceme
 
 ---
 
-## 4. Atomic operations — Postgres RPCs
+## 4. Atomic operations — client-side, best-effort
 
-Multi-table `db.transaction('rw', …)` sites that need server-side atomicity: Billing (invoice save, credit/debit note, invoice delete), Purchases (PO save, payment, bill reverse), Inventory (product + opening stock, stock-in, quick adjust), Payments (record, delete).
+**Decision:** no Postgres RPCs. `stockService.js` (`adjustStock`, `packageStock`) is genuinely intricate — packed/bulk/hybrid modes, unit conversion, BULK weighted-average-cost propagation across sibling variants — and re-implementing it in PL/pgSQL is the highest-risk part of the project. Instead the stock logic **stays in JS**, ported from `db.*` to the `src/api/*` layer, and multi-table operations run as **sequential client writes with compensating cleanup**. There is no `003_rpcs.sql`.
 
-Six `SECURITY DEFINER` functions in `003_rpcs.sql`. Each takes/derives `company_id` and re-checks `company_members` membership before touching rows.
+### 4.1 `stockService.js` port
 
-| RPC | Replaces | Behaviour (single transaction) |
+`adjustStock({ variantId, productId, packsDelta, type, reference, note, unitCost, batchNo })` and `packageStock(...)` keep their exact signatures and logic. Only the data calls change:
+- `db.productVariants.get(id)` → `getVariant(id)` (api)
+- `db.products.get(id)` / `.update(id, patch)` → `getProduct` / `updateProduct`
+- `db.productVariants.where('productId').equals(pid).toArray()` → `listVariantsByProduct(pid)`
+- `db.stockLedger.add(entry)` → `createStockLedgerEntry(entry)`
+- `convertUnit` (from `utils/unitConversion`) unchanged.
+
+Callers no longer wrap in `db.transaction('rw', …)` — they just `await` the calls in sequence.
+
+### 4.2 Multi-write operations & compensating cleanup
+
+| Operation | Sequence | On mid-sequence failure |
 |---|---|---|
-| `next_invoice_number(p_company_id uuid, p_type text) → text` | `db.getNextInvoiceNumber` | `update companies set invoice_seq = invoice_seq + 1 where id = p_company_id returning invoice_seq` (row lock); format `{prefix}-{year}-{seq:04}`; loop-skip if that `invoice_number` already exists |
-| `save_invoice(p_payload jsonb) → jsonb` | Billing `handleSaveInvoice`, Purchases PO save | insert `invoices` + `invoice_items`; per line: adjust `product_variants.stock_qty` (packed) or `products.master_stock` (bulk), recompute weighted-avg `average_cost` on stock-in, append `stock_ledger`; **Sales** → FEFO deduction across `batches` (earliest `expiry_date` first); **Purchase** → `batches` upsert (match on batch_no) + `purchases` row; insert payment `transactions` for each payment; compute `status`/`payment_status`. Branches on `p_payload->>'type'`. Returns the persisted invoice row as jsonb. |
-| `delete_invoice(p_invoice_id uuid)` | Billing + Purchases delete/reverse | reverse each stock movement for `reference = invoice_number` (re-add to variant/master, append reversing `stock_ledger` OR hard-delete the original ledger rows — decided in impl, leaning hard-delete since ledger is company-private and this is a true undo), delete linked `transactions`, delete `invoice_items`, delete `invoices` row |
-| `adjust_stock(p_variant_id uuid, p_base_qty_delta numeric, p_type text, p_reference text, p_unit_cost numeric, p_batch_no text, p_expiry date)` | `stockService.adjustStock` | weighted-avg `average_cost` update on positive delta; update `stock_qty`/`master_stock`; append `stock_ledger`; optional `batches` upsert. Used by Inventory stock-in / quick-adjust / opening stock and Purchases "receive". |
-| `record_payment(p_invoice_id uuid, p_party_id uuid, p_amount numeric, p_method text, p_date date, p_notes text)` | Payments record, Purchases payment | insert `transactions` row; recompute linked invoice `status`/`payment_status` from sum of related transactions vs `total` |
-| `delete_payment(p_txn_id uuid)` | Payments delete | delete `transactions` row; recompute linked invoice status |
+| **Invoice save** (Billing `handleSaveInvoice`, Purchases PO save) | 1. `nextInvoiceNumber()` → 2. `createInvoice(row)` → 3. per line: `adjustStock(...)` → 4. per line (purchase): `createPurchase` / batch upsert; (sale): FEFO `batches` deduction → 5. per payment: `createTransaction(...)` | wrap 2–5 in `try`; on throw, `deleteInvoice(id)` + `deleteInvoiceItems(id)` + best-effort reverse any `adjustStock` already applied (call `adjustStock` with negated `packsDelta`, `type:'void'`), then re-throw. Toast: "Invoice save failed and was rolled back." |
+| **Invoice delete** (Billing/Purchases) | reverse each line's stock (`adjustStock` negated, `type:'void'`) → delete linked `transactions` → delete `invoice_items` → delete `invoices` row | failures logged; deletion is idempotent-ish (retry safe) |
+| **Record payment** (Payments, Purchases) | `createTransaction(row)` → recompute linked invoice status from `listTransactionsByInvoice(id)` sum vs `total` → `updateInvoice(id, { status, payment_status })` | if status update fails, transaction row still stands; next load recomputes — acceptable |
+| **Delete payment** | `deleteTransaction(id)` → recompute + `updateInvoice` | same |
+| **Product + opening stock** (Inventory) | `createProduct` → `createVariant` → if opening qty: `adjustStock(type:'opening')` | on `adjustStock` failure, product/variant remain with zero stock — user can retry stock-in. Non-corrupting. |
 
-Single-table CRUD (party, product, variant, expense, lead, draft invoice) stays plain client inserts/updates — no RPC. "Create product with opening stock" = client insert of product + variant, then one `adjust_stock` call.
+### 4.3 Invoice number
 
-Client calls RPCs via `supabase.rpc('save_invoice', { p_payload })` wrapped in `src/api/rpc.js`.
+`nextInvoiceNumber()` in `src/api/company.js`: read `companies.invoice_prefix` + `invoice_seq`, compute `{prefix}-{year}-{seq+1:04}`, `update companies set invoice_seq = invoice_seq + 1 where id = cid`, return the string. A **unique constraint `(company_id, invoice_number)` on `invoices`** (added in `001_schema.sql`) is the backstop: `createInvoice` catches Postgres `23505` and retries `nextInvoiceNumber()` up to 3×.
+
+### 4.4 Accepted limitations (documented)
+
+- Two sessions saving invoices for the same company at the same instant can race on `invoice_seq` → the unique constraint + retry resolves the number collision; worst case one save retries.
+- Two sessions editing the same variant's stock concurrently → last-write-wins on `stock_qty` (a lost update). Acceptable for the expected one-active-user-per-company usage; a future `adjust_stock` RPC with row lock is the upgrade path if this bites.
+- A crash between sequential writes that also defeats the compensating `catch` (e.g. browser killed) can leave a half-saved invoice. `stock_ledger` is the audit trail to reconcile from.
+
+Single-table CRUD (party, product, variant, expense, lead, draft invoice) is plain client insert/update — nothing special.
 
 ---
 
@@ -221,7 +239,7 @@ Keep the state machine (`loading → landing → login → setup → reset-passw
 ## 7. Cutover
 
 - Placeholder rows are all in Supabase; `001_schema.sql` starts with `TRUNCATE <all business tables>, companies, company_members, subscriptions RESTART IDENTITY CASCADE;`.
-- **Migration order** (via Supabase MCP `apply_migration` on `lekhya-production`): `001_schema` → `002_rls` → `003_rpcs`.
+- **Migration order** (via Supabase MCP `apply_migration` on `lekhya-production`): `001_schema` → `002_rls`.
 - **User takes a manual dashboard snapshot before `001`** (MCP can't snapshot). Placeholder data, but cheap insurance.
 - Client cutover is a hard swap (no feature flag). `main.jsx` cleanup (§6) removes the old IndexedDB + SW + dead localStorage keys on first run of the new build.
 - First login after cutover: existing Supabase session → empty app; brand-new → SetupWizard.
@@ -231,8 +249,8 @@ Keep the state machine (`loading → landing → login → setup → reset-passw
 ## 8. Testing
 
 - **`vitest` (new dev dep):** pure logic only — GST CGST/SGST vs IGST split, `amountToWords`, `fmtPDF`, `utils/unitConversion`, `utils/validators`, `subscription.evaluateAccess`/`daysRemaining`, invoice-number formatting. ~6 files, `assert`-based.
-- **RPCs:** `supabase/tests.sql` run via MCP `execute_sql` on a throwaway branch — call each RPC, assert resulting `stock_ledger` / `product_variants.stock_qty` / `invoices.status` rows.
-- **Manual verification checklist** (per module): CRUD each entity; sales invoice → stock down + ledger + Reports reflect it; purchase invoice → stock up + batch + purchases row; payment → invoice status recompute; credit note → stock reversed; invoice delete → stock restored; two browser tabs → realtime invalidation.
+- **`stockService` port:** `vitest` tests that exercise `adjustStock`/`packageStock` against a mocked `src/api/*` layer (in-memory fake) — packed stock in/out, bulk masterStock, hybrid sale, BULK WAC sibling propagation, insufficient-stock throw. This is the highest-value test target since the logic moves data backends.
+- **Manual verification checklist** (per module): CRUD each entity; sales invoice → stock down + ledger + Reports reflect it; purchase invoice → stock up + batch + purchases row; payment → invoice status recompute; credit note → stock reversed; invoice delete → stock restored; invoice-save failure mid-sequence → invoice rolled back, stock unchanged; two browser tabs → realtime invalidation.
 - **Gates:** `npm run build` green every phase; `npm run lint` cleaned to green as files are rewritten (currently 28 errors) then used as a gate.
 
 ---
@@ -241,9 +259,11 @@ Keep the state machine (`loading → landing → login → setup → reset-passw
 
 | Risk | Mitigation |
 |---|---|
-| `save_invoice` is a large PL/pgSQL function replicating JS stock logic — divergence bugs | Port carefully with the RPC test SQL; keep the JS math helpers (`totals`) client-side for the preview only, server recomputes authoritative totals |
+| Multi-write ops aren't truly atomic — a crash defeating the compensating `catch` leaves a half-saved invoice | `stock_ledger` audit trail to reconcile; compensating cleanup covers the common (thrown-error) case; documented in §4.4; single-active-user usage keeps races rare |
+| Concurrent stock edits → lost update on `stock_qty` | Accepted (§4.4); upgrade path is an `adjust_stock` RPC with row lock |
+| `stockService` logic moves from Dexie to `src/api/*` — divergence bugs | Signatures + logic unchanged, only data calls swapped; `vitest` covers packed/bulk/hybrid/WAC paths against a fake api layer |
 | id-type coercion (`Number(id)`) scattered across pages | Dedicated search-and-fix pass; grep `Number(.*[Ii]d)` / `parseInt` |
-| React Query migration touches all 9 pages — regression surface | Phased: one page per step, build + manual checklist slice each |
+| React Query migration touches all 9 pages — regression surface | Phased: one page per task, build + manual checklist slice each |
 | `activities` on parties left as jsonb | Acceptable — freeform note log, never queried |
 | Realtime quota / connection limits on Supabase free tier | Single channel, all tables; acceptable for expected scale |
 | No CI — gates are manual | Explicit checklist in plan; each phase self-contained |
@@ -252,5 +272,5 @@ Keep the state machine (`loading → landing → login → setup → reset-passw
 
 - Rewriting the PDF/POS generation (`buildPDF`, `printPOSReceipt`) — unchanged, they take plain objects.
 - The theme toggle / minimal restyle (already shipped).
-- The invoice Preview & Print modal (already shipped) — will be re-pointed at `save_invoice` during the Billing phase.
+- The invoice Preview & Print modal (already shipped) — its `handleSaveInvoice` is re-pointed at the `src/api/*` layer during the Billing phase.
 - Any new features. This is behaviour-preserving except for the removed offline/local-auth capability.
