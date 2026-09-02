@@ -1,0 +1,256 @@
+# Remove offline: move Lekhya Web fully to Supabase
+
+**Date:** 2026-09-02
+**Status:** Approved (design) — pending spec review
+**Scope:** Architectural. Deletes the offline-first data layer (Dexie/IndexedDB + sync engine + PWA + local auth) and rebuilds the app on a typed Supabase (Postgres) backend.
+
+---
+
+## 1. Goal & context
+
+The app was split from an Electron desktop build to a web app. It is still offline-first: **Dexie/IndexedDB is the entire data layer** (9 pages, 43 `useLiveQuery(db…)` read sites, plus `stockService.js`, `subscription.js`, `SetupWizard`, `Login`, `App`), reconciled to Supabase by `src/lib/syncEngine.js`. The Supabase schema today is a generic sync mirror — every table is `(id, company_id, data jsonb, last_modified, device_id, deleted)` with the real record dumped in `data`.
+
+**Target:** Supabase is the single source of truth. No IndexedDB, no sync engine, no PWA/service worker, no local auth fallback. Typed Postgres columns, uuid PKs, RLS per tenant, RPCs for atomic multi-table operations. First login = clean slate (existing placeholder rows wiped).
+
+**Decisions locked in brainstorming:**
+- Full typed rewrite (not an adapter shim).
+- Postgres RPC functions + SQL migrations are in scope; applied to project `lekhya-production` (`pfnlpatvjkjykvvswouz`).
+- Existing Supabase rows (4 parties, 3 invoices, 4 products, 4 variants) are placeholder → deleted. No local-data migration.
+- Reactivity via `@tanstack/react-query` + Supabase Realtime invalidation.
+
+---
+
+## 2. Schema & IDs
+
+### 2.1 Typed columns, not jsonb
+
+Drop the `data jsonb` blob on all mirror tables; add real columns so Postgres filters/indexes/sorts (Reports & Invoice History currently pull whole tables and filter in JS).
+
+Tables (all in `public`):
+
+| Table | Notes |
+|---|---|
+| `companies` | **absorbs settings** — see 2.4 |
+| `company_members` | unchanged (`user_id, company_id, role, active`) |
+| `parties` | name, gstin, phone, address, email, type (`Customer`/`Vendor`), credit_limit, credit_days, activities jsonb (array of `{text,date}` — genuinely freeform, stays jsonb) |
+| `products` | name, hsn, inventory_mode (`packed`/`bulk`), master_stock numeric |
+| `product_variants` | product_id fk, pack_size numeric, unit, purchase_price, selling_price, gst_rate, stock_qty numeric, reorder_point, barcode, average_cost |
+| `invoices` | invoice_number, type (`Sales`/`Purchase`/`CreditNote`/`DebitNote`), party_id fk, date, due_date, tax_type (`IGST`/`CGST_SGST`), gross_subtotal, item_discount_amt, discount_pct, discount_amt, subtotal, tax_amount, shipping, total, status, payment_status, notes, terms, theme |
+| `invoice_items` | invoice_id fk, product_id, variant_id, name, hsn, unit, qty, rate, base_price, gst_rate, item_discount_pct, + snapshot cols (product_name, pack_size, cost_at_sale, purchase_price_snapshot, barcode_snapshot, selling_price) |
+| `transactions` | date, party_id fk, invoice_id fk (nullable), type (`Payment In`/`Payment Out`), amount, method, reference, notes, auto_recorded bool |
+| `payments` | present in schema, currently unused by the app — **keep table, leave unused** unless a page needs it; do not build new features on it |
+| `expenses` | date, category, amount, payment_method, vendor_name, notes |
+| `purchases` | product_id, variant_id, vendor_id fk, date, qty, purchase_price, notes |
+| `stock_ledger` | **append-only.** variant_id, product_id, type (`opening`/`purchase`/`sale`/`stock-in`/`stock-out`/`credit-note`/`debit-note`), packs, base_qty_delta, balance_qty, reference, note, batch_no, date |
+| `batches` | **new.** variant_id, product_id, batch_no, mfg_date, expiry_date, status (`active`/`exhausted`), received_qty, remaining_qty |
+| `leads` | **new.** name, source, contact_details, opportunity_value, stage |
+
+Exact column names/types/nullability/defaults are finalized in `001_schema.sql` during implementation by reading each page's record shape. `activities` on parties stays `jsonb` (freeform note log).
+
+### 2.2 IDs
+
+- Every table PK: `id uuid primary key default gen_random_uuid()`.
+- All FKs uuid: `party_id`, `invoice_id`, `variant_id`, `product_id`, `vendor_id`.
+- **Client generates the uuid on insert** (`crypto.randomUUID()`) so it holds the id before the round-trip — needed to build `invoice_items` before the invoice row exists and for optimistic updates.
+- Route params (`/ledger/:partyId`) already carry opaque strings — no change. **Fix:** `Ledger.jsx` currently does `Number(partyId)` and `Payments.jsx`/others do `Number(id)` on ids — every such `Number(...)`/`parseInt` coercion on an id is removed (ids are strings now). This is a search-and-fix pass across all pages.
+
+### 2.3 Tenancy & RLS
+
+- `company_id uuid not null` on every business table (from `company_members` lookup at auth, cached in `localStorage.lekhya_company_id`, same as today).
+- RLS policy per table:
+  ```sql
+  using (company_id in (
+    select company_id from company_members
+    where user_id = auth.uid() and active
+  ))
+  ```
+  `with check` identical on insert/update. `stock_ledger`: `select` + `insert` only, no `update`/`delete`.
+- Client still passes `.eq('company_id', cid)` for query planning; RLS is the guard.
+
+### 2.4 Settings → `companies` + localStorage
+
+The `settings` key/value table (Dexie) is dropped. Its contents split by nature:
+
+| Old setting | New home |
+|---|---|
+| `company` (name, gstin, address, phone, email, upi_id, logo, bank_name, bank_account, bank_ifsc) | columns on `companies` |
+| `invoicePrefix`, `invoiceSeq` | `invoice_prefix text`, `invoice_seq int` columns on `companies`; mutated only via `next_invoice_number` RPC |
+| `subscription` (trial cache) | `localStorage.lekhya_subscription` (per-browser) |
+| `invoiceTheme` | `localStorage.lekhya_theme_invoice` (per-browser UI pref) |
+
+`getSetting`/`setSetting` are deleted. Company reads/writes go through `src/api/company.js`.
+
+---
+
+## 3. Data-access layer + reactivity
+
+### 3.1 `src/api/` modules
+
+One module per entity: `parties.js`, `products.js`, `variants.js`, `invoices.js`, `invoiceItems.js`, `transactions.js`, `expenses.js`, `purchases.js`, `stockLedger.js`, `batches.js`, `leads.js`, `company.js`, plus `rpc.js` and `realtime.js`.
+
+Each exports plain async functions:
+```js
+// src/api/parties.js
+import { q, cid, rows, one } from './_client';
+export const listParties = ()      => rows(q('parties').select('*').order('name'));
+export const getParty     = (id)   => one(q('parties').select('*').eq('id', id).single());
+export const createParty  = (data) => one(q('parties').insert({ id: crypto.randomUUID(), company_id: cid(), ...data }).select().single());
+export const updateParty  = (id,p) => one(q('parties').update(p).eq('id', id).select().single());
+export const deleteParty  = (id)   => q('parties').delete().eq('id', id);
+```
+`src/api/_client.js`: `q(name)` = `supabase.from(name)`; `cid()` = `localStorage.lekhya_company_id`; `rows`/`one` unwrap `{data,error}` and throw on error.
+
+### 3.2 React Query
+
+Add `@tanstack/react-query`. `QueryClientProvider` wraps the app in `App.jsx`.
+
+- **Read wrapper** (keeps page churn minimal):
+  ```js
+  // src/api/useTable.js
+  export function useTable(key, fn) {
+    const { data } = useQuery({ queryKey: [key], queryFn: fn, staleTime: 30_000 });
+    return data ?? [];   // mimics the old `useLiveQuery(...) ?? []` contract
+  }
+  ```
+  Pages change `const parties = useLiveQuery(() => db.parties.orderBy('name').toArray())` → `const parties = useTable('parties', listParties)`. Existing `parties || []` / `parties?.length` code keeps working.
+- **Filtered/derived queries** (Reports date ranges, Ledger by party) become parametrised query fns with keys like `['transactions', partyId]`.
+- **Writes:** `useEntity('parties')` hook → `{ rows, create, update, remove }`; each mutation `await`s the api fn then `queryClient.invalidateQueries({ queryKey: ['parties'] })`. Handler bodies stay close to today's shape.
+- Explicit `isLoading` spinners added only on Dashboard and Invoice History (elsewhere the empty-array default is fine).
+
+### 3.3 Realtime
+
+```js
+// src/api/realtime.js
+let channel;
+export function startRealtime(queryClient) {
+  const companyId = localStorage.getItem('lekhya_company_id');
+  if (!companyId || channel) return;
+  channel = supabase.channel('lekhya');
+  for (const t of TENANT_TABLES) {
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: t, filter: `company_id=eq.${companyId}` },
+      () => queryClient.invalidateQueries({ queryKey: [t] }));
+  }
+  channel.subscribe();
+}
+export function stopRealtime() { if (channel) { supabase.removeChannel(channel); channel = null; } }
+```
+Wired in `App.jsx` after auth; torn down on logout. This is the entire replacement for `syncEngine.js` (~30 lines vs 248).
+
+### 3.4 Deleted
+
+`src/lib/syncEngine.js`, `src/db/db.js`, deps `dexie` + `dexie-react-hooks`, and all `cloudId`/`syncStatus`/`deviceId`/`syncQueue`/`_fromSync` machinery.
+
+---
+
+## 4. Atomic operations — Postgres RPCs
+
+Multi-table `db.transaction('rw', …)` sites that need server-side atomicity: Billing (invoice save, credit/debit note, invoice delete), Purchases (PO save, payment, bill reverse), Inventory (product + opening stock, stock-in, quick adjust), Payments (record, delete).
+
+Six `SECURITY DEFINER` functions in `003_rpcs.sql`. Each takes/derives `company_id` and re-checks `company_members` membership before touching rows.
+
+| RPC | Replaces | Behaviour (single transaction) |
+|---|---|---|
+| `next_invoice_number(p_company_id uuid, p_type text) → text` | `db.getNextInvoiceNumber` | `update companies set invoice_seq = invoice_seq + 1 where id = p_company_id returning invoice_seq` (row lock); format `{prefix}-{year}-{seq:04}`; loop-skip if that `invoice_number` already exists |
+| `save_invoice(p_payload jsonb) → jsonb` | Billing `handleSaveInvoice`, Purchases PO save | insert `invoices` + `invoice_items`; per line: adjust `product_variants.stock_qty` (packed) or `products.master_stock` (bulk), recompute weighted-avg `average_cost` on stock-in, append `stock_ledger`; **Sales** → FEFO deduction across `batches` (earliest `expiry_date` first); **Purchase** → `batches` upsert (match on batch_no) + `purchases` row; insert payment `transactions` for each payment; compute `status`/`payment_status`. Branches on `p_payload->>'type'`. Returns the persisted invoice row as jsonb. |
+| `delete_invoice(p_invoice_id uuid)` | Billing + Purchases delete/reverse | reverse each stock movement for `reference = invoice_number` (re-add to variant/master, append reversing `stock_ledger` OR hard-delete the original ledger rows — decided in impl, leaning hard-delete since ledger is company-private and this is a true undo), delete linked `transactions`, delete `invoice_items`, delete `invoices` row |
+| `adjust_stock(p_variant_id uuid, p_base_qty_delta numeric, p_type text, p_reference text, p_unit_cost numeric, p_batch_no text, p_expiry date)` | `stockService.adjustStock` | weighted-avg `average_cost` update on positive delta; update `stock_qty`/`master_stock`; append `stock_ledger`; optional `batches` upsert. Used by Inventory stock-in / quick-adjust / opening stock and Purchases "receive". |
+| `record_payment(p_invoice_id uuid, p_party_id uuid, p_amount numeric, p_method text, p_date date, p_notes text)` | Payments record, Purchases payment | insert `transactions` row; recompute linked invoice `status`/`payment_status` from sum of related transactions vs `total` |
+| `delete_payment(p_txn_id uuid)` | Payments delete | delete `transactions` row; recompute linked invoice status |
+
+Single-table CRUD (party, product, variant, expense, lead, draft invoice) stays plain client inserts/updates — no RPC. "Create product with opening stock" = client insert of product + variant, then one `adjust_stock` call.
+
+Client calls RPCs via `supabase.rpc('save_invoice', { p_payload })` wrapped in `src/api/rpc.js`.
+
+---
+
+## 5. Auth & onboarding
+
+### 5.1 `App.jsx` / `AuthGate`
+
+Keep the state machine (`loading → landing → login → setup → reset-password → app`), remove the local-session path.
+
+- Init: `supabase.auth.getSession()` → verify `company_members` row (keep the PGRST116 = removed-account handling) → set `lekhya_company_id`, set user, `startRealtime(queryClient)`.
+- **Delete:** `SESSION_KEY`, `SESSION_TTL_MS`, `saveSession`, `loadSession`, the "try local session" branch. `onLogin` loses the `remember` arg (Supabase `persistSession: true` already remembers). `clearSession` → clears `lekhya_company_id` + `lekhya_subscription`.
+- `startAutoSync`/`stopAutoSync`/`sync` imports → `startRealtime`/`stopRealtime`.
+
+### 5.2 `Login.jsx`
+
+- **Delete:** offline-fallback branch in `handleLogin`, `_localAuth` brute-force block + `checkLocalLoginLock`/`recordLocalFailure`/`clearLocalLock`, `verifyUser`/`db`/`getSetting` imports.
+- **Drop the "Forgot Email / Username" flow** (`forgot-choice` → goes straight to `forgot-password`; delete `forgot-email` screen, `handleLookupEmail`, `lookupResult`, `maskEmail`). It only ever queried local Dexie; a server-side version would let anyone enumerate emails by GSTIN.
+- **Keep:** Supabase `signInWithPassword`, membership + company existence checks, `handleForgotPassword` (email reset link), the exported `PasswordReset` screen.
+
+### 5.3 `SetupWizard.jsx`
+
+- **Keep:** `supabase.auth.signUp` → insert `companies` → insert `company_members` (`role: 'owner'`).
+- **Delete:** step-5 `createUser()` local user, the offline-fallback `catch` branch, `setSetting('company', …)`, `cloudStatus`-offline UI.
+- Company insert writes all profile + bank columns onto `companies` (columns added in `001`).
+- Copy: "sync data across Desktop and Android" → "Access your account from any browser."
+
+### 5.4 `db.js` auth helpers removed
+
+`createUser`, `verifyUser`, `isSetupComplete` (already unused), `updateUserPassword`, `resetPasswordByCompanyName`, all PBKDF2 code, the `users` table.
+
+### 5.5 `subscription.js`
+
+`getSetting`/`setSetting` → `localStorage` (`lekhya_subscription`). `ensureTrialStarted` seeds the trial object in localStorage on first `SubscriptionGate` mount. License `activate_license` / `get_license_status` RPC calls unchanged (already server-side truth).
+
+---
+
+## 6. Offline-shell removal
+
+- **PWA:** remove `VitePWA({…})` + import from `vite.config.js`; remove `vite-plugin-pwa` from `package.json`. (Manifest references non-existent `pwa-*.png` — dead config.)
+- **One-time cleanup in `main.jsx`** (keep ~2 releases):
+  ```js
+  try { indexedDB.deleteDatabase('crm-gst-billing-db'); } catch {}
+  navigator.serviceWorker?.getRegistrations?.().then(rs => rs.forEach(r => r.unregister())).catch(()=>{});
+  caches?.keys?.().then(ks => ks.forEach(k => caches.delete(k))).catch(()=>{});
+  ['lekhya_session','bizcrm_session','lekhya_last_sync','lekhya_device_id'].forEach(k => localStorage.removeItem(k));
+  ```
+- **`App.jsx`:** delete `useOnlineStatus`, the Online/Offline topbar badge, `handleSync`, the sync `<button>`, `RefreshCw` import, the empty sidebar-footer div.
+- **Delete** `src/lib/syncEngine.js`.
+- **`README.md`:** rewrite to "web app" — tech-stack table (drop Electron/Dexie, add Supabase + react-query), delete Electron/`dist:win`/Google-Drive/DB-schema sections, remove the trailing stray "Bizz-ledger" line.
+- **`smoke-test.mjs`:** delete (stale).
+
+### package.json net changes
+- Remove: `dexie`, `dexie-react-hooks`, `vite-plugin-pwa`
+- Add: `@tanstack/react-query`
+
+---
+
+## 7. Cutover
+
+- Placeholder rows are all in Supabase; `001_schema.sql` starts with `TRUNCATE <all business tables>, companies, company_members, subscriptions RESTART IDENTITY CASCADE;`.
+- **Migration order** (via Supabase MCP `apply_migration` on `lekhya-production`): `001_schema` → `002_rls` → `003_rpcs`.
+- **User takes a manual dashboard snapshot before `001`** (MCP can't snapshot). Placeholder data, but cheap insurance.
+- Client cutover is a hard swap (no feature flag). `main.jsx` cleanup (§6) removes the old IndexedDB + SW + dead localStorage keys on first run of the new build.
+- First login after cutover: existing Supabase session → empty app; brand-new → SetupWizard.
+
+---
+
+## 8. Testing
+
+- **`vitest` (new dev dep):** pure logic only — GST CGST/SGST vs IGST split, `amountToWords`, `fmtPDF`, `utils/unitConversion`, `utils/validators`, `subscription.evaluateAccess`/`daysRemaining`, invoice-number formatting. ~6 files, `assert`-based.
+- **RPCs:** `supabase/tests.sql` run via MCP `execute_sql` on a throwaway branch — call each RPC, assert resulting `stock_ledger` / `product_variants.stock_qty` / `invoices.status` rows.
+- **Manual verification checklist** (per module): CRUD each entity; sales invoice → stock down + ledger + Reports reflect it; purchase invoice → stock up + batch + purchases row; payment → invoice status recompute; credit note → stock reversed; invoice delete → stock restored; two browser tabs → realtime invalidation.
+- **Gates:** `npm run build` green every phase; `npm run lint` cleaned to green as files are rewritten (currently 28 errors) then used as a gate.
+
+---
+
+## 9. Risks & open items
+
+| Risk | Mitigation |
+|---|---|
+| `save_invoice` is a large PL/pgSQL function replicating JS stock logic — divergence bugs | Port carefully with the RPC test SQL; keep the JS math helpers (`totals`) client-side for the preview only, server recomputes authoritative totals |
+| id-type coercion (`Number(id)`) scattered across pages | Dedicated search-and-fix pass; grep `Number(.*[Ii]d)` / `parseInt` |
+| React Query migration touches all 9 pages — regression surface | Phased: one page per step, build + manual checklist slice each |
+| `activities` on parties left as jsonb | Acceptable — freeform note log, never queried |
+| Realtime quota / connection limits on Supabase free tier | Single channel, all tables; acceptable for expected scale |
+| No CI — gates are manual | Explicit checklist in plan; each phase self-contained |
+
+## 10. Out of scope
+
+- Rewriting the PDF/POS generation (`buildPDF`, `printPOSReceipt`) — unchanged, they take plain objects.
+- The theme toggle / minimal restyle (already shipped).
+- The invoice Preview & Print modal (already shipped) — will be re-pointed at `save_invoice` during the Billing phase.
+- Any new features. This is behaviour-preserving except for the removed offline/local-auth capability.
