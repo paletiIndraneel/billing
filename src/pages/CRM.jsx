@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
 import { Plus, Edit2, Trash2, Search, BookOpen, Clock, Users, Building2 } from 'lucide-react';
+import { useEntity } from '../api/useEntity';
+import { QK } from '../api/realtime';
+import { listParties, createParty, updateParty, deleteParty as apiDeleteParty } from '../api/parties';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import { validateGSTIN, validatePhone, validateEmail, isDummyPhone, normalizePhone, normalizeGSTIN } from '../utils/validators';
@@ -11,7 +12,7 @@ const EMPTY_PARTY = { name: '', gstin: '', phone: '', address: '', type: 'Custom
 
 export default function CRM() {
   const navigate = useNavigate();
-  const parties = useLiveQuery(() => db.parties.orderBy('name').toArray());
+  const { rows: parties, create, update, remove } = useEntity(QK.parties, { list: listParties, create: createParty, update: updateParty, remove: apiDeleteParty });
 
   const [partyModal, setPartyModal] = useState(null);
   const [search, setSearch] = useState('');
@@ -51,7 +52,7 @@ export default function CRM() {
 
     // Duplicate detection: check GSTIN and phone against existing contacts
     try {
-      const all = await db.parties.toArray();
+      const all = parties;
       const gstinNorm = normalizeGSTIN(data.gstin);
       const phoneNorm = normalizePhone(data.phone);
 
@@ -75,10 +76,10 @@ export default function CRM() {
 
     try {
       if (partyModal.mode === 'add') {
-        await db.parties.add(data);
+        await create(data);
         toast('Contact added', 'success');
       } else {
-        await db.parties.update(id, data);
+        await update(id, data);
         toast('Contact updated', 'success');
       }
       setPartyModal(null);
@@ -88,7 +89,7 @@ export default function CRM() {
   };
 
   const deleteParty = async () => {
-    await db.parties.delete(partyModal.data.id);
+    await remove(partyModal.data.id);
     setPartyModal(null);
     toast('Contact deleted', 'success');
   };
