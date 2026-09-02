@@ -13,6 +13,8 @@ drop table if exists product_variants cascade;
 drop table if exists products cascade;
 drop table if exists parties cascade;
 drop table if exists expenses cascade;
+drop table if exists batches cascade;
+drop table if exists leads cascade;
 
 -- 2. Settings columns on companies (spec §2.4)
 alter table companies add column if not exists upi_id text;
