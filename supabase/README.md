@@ -14,3 +14,8 @@ Order: `001_schema` → `002_rls`.
 There are no stored procedures / RPCs. Multi-table operations (invoice save,
 stock adjustment) run client-side with compensating cleanup — see
 `docs/superpowers/specs/2026-09-02-supabase-rewrite-design.md` §4.
+
+## Applied
+
+- `001_schema` — applied to lekhya-production on 2026-09-02
+- `002_rls` — applied to lekhya-production on 2026-09-02
