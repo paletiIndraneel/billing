@@ -2,11 +2,13 @@ import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react
 import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, RefreshCw, Sun, Moon } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
 import logo from './assets/logo.png';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ToastProvider, useToast } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import { startAutoSync, stopAutoSync, sync } from './lib/syncEngine';
+import { startRealtime, stopRealtime } from './api/realtime';
 import SubscriptionGate from './components/SubscriptionGate';
 import { PasswordReset } from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -23,32 +25,11 @@ import Expenses from './pages/Expenses';
 import Reports from './pages/Reports';
 import Purchases from './pages/Purchases';
 
-const SESSION_KEY = 'lekhya_session';
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-function saveSession(user) {
-  const session = { id: user.id, username: user.username, email: user.email || '', expiresAt: Date.now() + SESSION_TTL_MS };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
-}
-
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw);
-    if (!session?.id || !session?.username || !session?.expiresAt) return null;
-    if (Date.now() > session.expiresAt) { localStorage.removeItem(SESSION_KEY); return null; }
-    return session;
-  } catch {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
 function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem('bizcrm_session');
+  localStorage.removeItem('lekhya_company_id');
+  localStorage.removeItem('lekhya_subscription');
 }
 
 function useOnlineStatus() {
@@ -204,6 +185,7 @@ function AppLayout({ user, onLogout }) {
 function AuthGate() {
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
+  const qc = useQueryClient();
 
   useEffect(() => {
     // Listen for PASSWORD_RECOVERY event fired when user clicks the reset email link
@@ -246,17 +228,7 @@ function AuthGate() {
         });
         setAuthState('app');
         startAutoSync();
-        return;
-      }
-
-      // Try local session (offline-only users)
-      const localSession = loadSession();
-      if (localSession) {
-        setUser(localSession);
-        setAuthState('app');
-        // Attempt sync even for local sessions — works if Supabase credentials are
-        // stored from a previous cloud login (token may still be valid in cookie).
-        startAutoSync();
+        startRealtime(qc);
         return;
       }
 
@@ -295,11 +267,11 @@ function AuthGate() {
   if (authState === 'login') {
     return (
       <Login
-        onLogin={(u, remember) => {
-          if (remember) saveSession(u);
+        onLogin={(u) => {
           setUser({ id: u.id, username: u.username, email: u.email || '' });
           setAuthState('app');
           startAutoSync();
+          startRealtime(qc);
         }}
         onBack={() => setAuthState('landing')}
       />
@@ -312,6 +284,7 @@ function AuthGate() {
         user={user}
         onLogout={async () => {
           stopAutoSync();
+          stopRealtime();
           clearSession();
           await supabase.auth.signOut();
           setUser(null);
@@ -324,10 +297,12 @@ function AuthGate() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <Router>
-        <AuthGate />
-      </Router>
-    </ToastProvider>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <Router>
+          <AuthGate />
+        </Router>
+      </ToastProvider>
+    </QueryClientProvider>
   );
 }
