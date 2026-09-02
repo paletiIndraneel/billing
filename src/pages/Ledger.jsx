@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, getSetting } from '../db/db';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ArrowLeft, Download, FileText, TrendingUp, TrendingDown, Clock, Activity } from 'lucide-react';
 import { useToast } from '../components/Toast';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { getParty } from '../api/parties';
+import { listInvoicesByParty } from '../api/invoices';
+import { listTransactionsByParty } from '../api/transactions';
+import { getCompany } from '../api/company';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -21,9 +25,9 @@ export default function Ledger() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const party = useLiveQuery(() => db.parties.get(Number(partyId)));
-  const allInvoices = useLiveQuery(() => db.invoices.where('partyId').equals(Number(partyId)).toArray());
-  const allTransactions = useLiveQuery(() => db.transactions.where('partyId').equals(Number(partyId)).toArray());
+  const party = useTable([QK.parties, partyId], () => getParty(partyId), null);
+  const allInvoices = useTable([QK.invoices, partyId], () => listInvoicesByParty(partyId));
+  const allTransactions = useTable([QK.transactions, partyId], () => listTransactionsByParty(partyId));
 
   const today = new Date().toISOString().slice(0, 10);
   const threeMonthsAgo = (() => {
@@ -89,7 +93,7 @@ export default function Ledger() {
 
   const downloadPDF = async () => {
     if (!party) return;
-    const company = await getSetting('company', {});
+    const company = await getCompany() ?? {};
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const W = 210, L = 14, R = W - 14;
 
