@@ -1,14 +1,19 @@
 import { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, ArrowDownCircle, ArrowUpCircle, Search, FileText, IndianRupee } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { listTransactions, getTransaction, createTransaction, deleteTransaction, listTransactionsByInvoice } from '../api/transactions';
+import { listParties } from '../api/parties';
+import { listInvoices, updateInvoice } from '../api/invoices';
 
 export default function Payments() {
-  const transactions = useLiveQuery(() => db.transactions.reverse().toArray());
-  const parties = useLiveQuery(() => db.parties.toArray());
-  const invoices = useLiveQuery(() => db.invoices.toArray());
+  const transactions = useTable(QK.transactions, listTransactions);
+  const parties = useTable(QK.parties, listParties);
+  const invoices = useTable(QK.invoices, listInvoices);
+  const qc = useQueryClient();
 
   const [paymentModal, setPaymentModal] = useState(null); // { mode: 'add', data: {...} }
   const toast = useToast();
@@ -44,7 +49,7 @@ export default function Payments() {
   // Filter transactions based on active selections
   const filteredTransactions = useMemo(() => {
     return (transactions || []).filter(txn => {
-      const matchParty = !filterParty || String(txn.partyId) === String(filterParty);
+      const matchParty = !filterParty || txn.partyId === filterParty;
       const matchMethod = filterMethod === 'All' || txn.method === filterMethod;
       const matchType = filterType === 'All' || txn.type === filterType;
       const txnDate = new Date(txn.date);
@@ -78,8 +83,8 @@ export default function Payments() {
       mode: 'add',
       data: {
         date: new Date().toISOString().slice(0, 10),
-        partyId: String(inv.partyId),
-        invoiceId: String(inv.id),
+        partyId: inv.partyId,
+        invoiceId: inv.id,
         type: inv.type === 'Purchase' ? 'Payment Out' : 'Payment In',
         amount: String(inv.dueAmount ?? inv.total),
         method: 'Bank Transfer',
@@ -95,9 +100,7 @@ export default function Payments() {
     e.preventDefault();
     const data = { ...paymentModal.data };
     data.amount = Number(data.amount);
-    data.partyId = Number(data.partyId);
-    if (data.invoiceId) data.invoiceId = Number(data.invoiceId);
-    else delete data.invoiceId;
+    if (!data.invoiceId) delete data.invoiceId;
 
     if (!data.partyId) {
       toast('Please select a party', 'warning');
@@ -109,24 +112,18 @@ export default function Payments() {
     }
 
     try {
-      await db.transaction('rw', db.transactions, db.invoices, async () => {
-        await db.transactions.add(data);
-        
-        // Auto-update linked invoice status
-        if (data.invoiceId) {
-          const inv = await db.invoices.get(data.invoiceId);
-          if (inv) {
-            const relatedTxns = await db.transactions.where('invoiceId').equals(inv.id).toArray();
-            const sumPaid = relatedTxns.reduce((s, t) => s + t.amount, 0) + data.amount;
-            if (sumPaid >= inv.total) {
-              await db.invoices.update(inv.id, { status: 'Paid' });
-            } else if (sumPaid > 0) {
-              await db.invoices.update(inv.id, { status: 'Partial' });
-            }
-          }
+      await createTransaction(data);
+      if (data.invoiceId) {
+        const inv = invoices.find(i => i.id === data.invoiceId);
+        if (inv) {
+          const related = await listTransactionsByInvoice(inv.id);      // includes the just-created row (awaited)
+          const sumPaid = related.reduce((s, t) => s + t.amount, 0);    // do NOT add data.amount again
+          const status = sumPaid >= inv.total ? 'Paid' : sumPaid > 0 ? 'Partial' : inv.status;
+          if (status !== inv.status) await updateInvoice(inv.id, { status });
         }
-      });
-      
+      }
+      qc.invalidateQueries({ queryKey: [QK.transactions] });
+      qc.invalidateQueries({ queryKey: [QK.invoices] });
       toast(`${data.type} recorded successfully`, 'success');
       setPaymentModal(null);
     } catch (err) {
@@ -137,24 +134,19 @@ export default function Payments() {
   const deletePayment = async (id) => {
     if (!window.confirm('Delete this payment record?')) return;
     try {
-      const txn = await db.transactions.get(id);
-      await db.transaction('rw', db.transactions, db.invoices, async () => {
-        await db.transactions.delete(id);
-        
-        // Auto-revert linked invoice status to Pending if it was paid
-        if (txn?.invoiceId) {
-          const inv = await db.invoices.get(txn.invoiceId);
-          if (inv) {
-            const relatedTxns = await db.transactions.where('invoiceId').equals(inv.id).toArray();
-            const sumPaid = relatedTxns.filter(t => t.id !== id).reduce((s, t) => s + t.amount, 0);
-            if (sumPaid <= 0) {
-              await db.invoices.update(inv.id, { status: 'Pending' });
-            } else if (sumPaid < inv.total) {
-              await db.invoices.update(inv.id, { status: 'Partial' });
-            }
-          }
+      const txn = await getTransaction(id);
+      await deleteTransaction(id);
+      if (txn?.invoiceId) {
+        const inv = invoices.find(i => i.id === txn.invoiceId);
+        if (inv) {
+          const related = await listTransactionsByInvoice(inv.id);
+          const sumPaid = related.reduce((s, t) => s + t.amount, 0);
+          const status = sumPaid >= inv.total ? 'Paid' : sumPaid > 0 ? 'Partial' : 'Pending';
+          await updateInvoice(inv.id, { status });
         }
-      });
+      }
+      qc.invalidateQueries({ queryKey: [QK.transactions] });
+      qc.invalidateQueries({ queryKey: [QK.invoices] });
       toast('Payment deleted', 'success');
     } catch (err) {
       toast('Failed to delete payment', 'error');
