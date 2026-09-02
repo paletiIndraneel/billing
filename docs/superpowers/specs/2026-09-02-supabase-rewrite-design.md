@@ -112,7 +112,7 @@ Add `@tanstack/react-query`. `QueryClientProvider` wraps the app in `App.jsx`.
     return data ?? [];   // mimics the old `useLiveQuery(...) ?? []` contract
   }
   ```
-  Pages change `const parties = useLiveQuery(() => db.parties.orderBy('name').toArray())` → `const parties = useTable('parties', listParties)`. Existing `parties || []` / `parties?.length` code keeps working.
+  Pages change `const parties = useLiveQuery(() => db.parties.orderBy('name').toArray())` → `const parties = useTable('parties', listParties)`. Existing `parties || []` / `parties?.length` code keeps working. Pages MUST use the `QK` keys exported from `realtime.js` (e.g. `useTable(QK.invoiceItems, listItemsByInvoice)`) so realtime coverage and query keys can't drift apart.
 - **Filtered/derived queries** (Reports date ranges, Ledger by party) become parametrised query fns with keys like `['transactions', partyId]`.
 - **Writes:** `useEntity('parties')` hook → `{ rows, create, update, remove }`; each mutation `await`s the api fn then `queryClient.invalidateQueries({ queryKey: ['parties'] })`. Handler bodies stay close to today's shape.
 - Explicit `isLoading` spinners added only on Dashboard and Invoice History (elsewhere the empty-array default is fine).
@@ -121,15 +121,27 @@ Add `@tanstack/react-query`. `QueryClientProvider` wraps the app in `App.jsx`.
 
 ```js
 // src/api/realtime.js
+// TABLES maps pg table name → camelCase app query key. The invalidation key is
+// ALWAYS the camelCase app key (variants, invoiceItems, stockLedger, company),
+// NOT the pg table name — that's what useTable/useEntity key on.
+const TABLES = {
+  parties: 'parties', products: 'products', product_variants: 'variants',
+  invoices: 'invoices', invoice_items: 'invoiceItems', transactions: 'transactions',
+  expenses: 'expenses', purchases: 'purchases', stock_ledger: 'stockLedger',
+  batches: 'batches', leads: 'leads', companies: 'company',
+};
+// canonical query keys — pages MUST key useTable/useEntity on one of these
+export const QK = Object.fromEntries(Object.values(TABLES).map(k => [k, k]));
+
 let channel;
 export function startRealtime(queryClient) {
   const companyId = localStorage.getItem('lekhya_company_id');
   if (!companyId || channel) return;
   channel = supabase.channel('lekhya');
-  for (const t of TENANT_TABLES) {
+  for (const [pgTable, key] of Object.entries(TABLES)) {
     channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: t, filter: `company_id=eq.${companyId}` },
-      () => queryClient.invalidateQueries({ queryKey: [t] }));
+      { event: '*', schema: 'public', table: pgTable, filter: `company_id=eq.${companyId}` },
+      () => queryClient.invalidateQueries({ queryKey: [key] }));
   }
   channel.subscribe();
 }

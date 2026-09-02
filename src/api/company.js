@@ -28,10 +28,10 @@ export function formatInvoiceNumber(prefix, year, seq) {
 }
 
 export const getCompany = async () =>
-  fromRow(await one(q('companies').select('*').eq('id', cid()).single()));
+  fromRow(await one(q('companies').select('*').eq('id', cid()).maybeSingle()));
 
 export const updateCompany = async (patch) =>
-  fromRow(await one(q('companies').update(toRow(patch)).eq('id', cid()).select().single()));
+  fromRow(await one(q('companies').update(toRow(patch)).eq('id', cid()).select().maybeSingle()));
 
 export async function nextInvoiceNumber() {
   const co = await getCompany();

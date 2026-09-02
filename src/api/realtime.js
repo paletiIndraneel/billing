@@ -4,8 +4,11 @@ const TABLES = {
   parties: 'parties', products: 'products', product_variants: 'variants',
   invoices: 'invoices', invoice_items: 'invoiceItems', transactions: 'transactions',
   expenses: 'expenses', purchases: 'purchases', stock_ledger: 'stockLedger',
-  batches: 'batches', leads: 'leads',
+  batches: 'batches', leads: 'leads', companies: 'company',
 };
+
+// canonical query keys — pages MUST key useTable/useEntity on one of these
+export const QK = Object.fromEntries(Object.values(TABLES).map(k => [k, k]));
 
 let channel = null;
 

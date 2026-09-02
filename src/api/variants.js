@@ -21,12 +21,12 @@ export const fromRow = (r) => r && ({
 export const toRow = (d) => {
   const out = {};
   if ('productId' in d) out.product_id = d.productId;
-  if ('packSize' in d) out.pack_size = d.packSize;
+  if ('packSize' in d) out.pack_size = Number(d.packSize) || 0;
   if ('unit' in d) out.unit = d.unit;
-  if ('purchasePrice' in d) out.purchase_price = d.purchasePrice;
-  if ('sellingPrice' in d) out.selling_price = d.sellingPrice;
-  if ('gstRate' in d) out.gst_rate = d.gstRate;
-  if ('stockQty' in d) out.stock_qty = d.stockQty;
+  if ('purchasePrice' in d) out.purchase_price = Number(d.purchasePrice) || 0;
+  if ('sellingPrice' in d) out.selling_price = Number(d.sellingPrice) || 0;
+  if ('gstRate' in d) out.gst_rate = Number(d.gstRate) || 0;
+  if ('stockQty' in d) out.stock_qty = Number(d.stockQty) || 0;
   if ('reorderPoint' in d) out.reorder_point = d.reorderPoint ?? null;
   if ('barcode' in d) out.barcode = d.barcode || null;
   if ('averageCost' in d) out.average_cost = d.averageCost ?? null;

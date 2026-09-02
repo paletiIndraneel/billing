@@ -199,41 +199,48 @@ function AuthGate() {
 
   useEffect(() => {
     const init = async () => {
-      // Try active Supabase session (cached token works offline)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Always re-verify membership on app start (catches deactivated accounts)
-        const { data: membership, error: memberError } = await supabase
-          .from('company_members')
-          .select('company_id')
-          .eq('user_id', session.user.id)
-          .single();
+      try {
+        // Try active Supabase session (cached token works offline)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Always re-verify membership on app start (catches deactivated accounts)
+          const { data: membership, error: memberError } = await supabase
+            .from('company_members')
+            .select('company_id')
+            .eq('user_id', session.user.id)
+            .single();
 
-        // PGRST116 = no rows = account removed; other errors = network issue (allow offline)
-        if (memberError?.code === 'PGRST116') {
-          await supabase.auth.signOut();
-          clearSession();
-          setAuthState('landing');
+          // PGRST116 = no rows = account removed; other errors = network issue (allow offline)
+          if (memberError?.code === 'PGRST116') {
+            await supabase.auth.signOut().catch(() => {});
+            clearSession();
+            setAuthState('landing');
+            return;
+          }
+
+          if (membership?.company_id) {
+            localStorage.setItem('lekhya_company_id', membership.company_id);
+          }
+
+          // Unresolved company membership → don't mount a broken app shell
+          if (!localStorage.getItem('lekhya_company_id')) { setAuthState('landing'); return; }
+
+          setUser({
+            id: session.user.id,
+            username: session.user.user_metadata?.username || session.user.email.split('@')[0],
+            email: session.user.email,
+          });
+          setAuthState('app');
+          startAutoSync();
+          startRealtime(qc);
           return;
         }
 
-        if (membership?.company_id) {
-          localStorage.setItem('lekhya_company_id', membership.company_id);
-        }
-
-        setUser({
-          id: session.user.id,
-          username: session.user.user_metadata?.username || session.user.email.split('@')[0],
-          email: session.user.email,
-        });
-        setAuthState('app');
-        startAutoSync();
-        startRealtime(qc);
-        return;
+        // No session — show landing (Sign In / Sign Up choice)
+        setAuthState('landing');
+      } catch {
+        setAuthState('landing');
       }
-
-      // No session — show landing (Sign In / Sign Up choice)
-      setAuthState('landing');
     };
     init();
   }, []);
@@ -285,8 +292,8 @@ function AuthGate() {
         onLogout={async () => {
           stopAutoSync();
           stopRealtime();
+          await supabase.auth.signOut().catch(() => {});
           clearSession();
-          await supabase.auth.signOut();
           setUser(null);
           setAuthState('landing');
         }}

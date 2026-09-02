@@ -10,6 +10,6 @@ export function useEntity(name, api) {
     create: async (data) => { const r = await api.create(data); await invalidate(); return r; },
     update: async (id, patch) => { const r = await api.update(id, patch); await invalidate(); return r; },
     remove: async (id) => { await api.remove(id); await invalidate(); },
-    refetch: invalidate,
+    invalidate,
   };
 }
