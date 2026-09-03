@@ -2,7 +2,6 @@
 // Every stock change (sale, purchase, return, adjustment, packaging) must go through adjustStock or packageStock.
 //
 // Rules:
-//   - Must be called inside a Dexie 'rw' transaction covering db.productVariants, db.products, db.stockLedger.
 //   - packsDelta > 0  →  stock in  (purchase, return, opening)
 //   - packsDelta < 0  →  stock out (sale, adjustment, write-off)
 //   - Throws if the resulting balance would go below zero.
@@ -18,7 +17,9 @@
 // BULK WAC:     averageCost is stored per-pack on each variant but derived from a single
 //               cost-per-base-unit so all sibling variants stay consistent.
 
-import { db } from '../db/db';
+import { getVariant, updateVariant, listVariantsByProduct } from '../api/variants.js';
+import { getProduct, updateProduct } from '../api/products.js';
+import { createStockLedgerEntry } from '../api/stockLedger.js';
 import { convertUnit } from '../utils/unitConversion';
 
 // Returns the effective pack size in the product's canonical base unit.
@@ -36,14 +37,14 @@ function effectivePackSz(variant, product) {
 }
 
 export async function adjustStock({ variantId, productId, packsDelta, type, reference = '', note = '', unitCost = null, batchNo = null }) {
-  const v = await db.productVariants.get(variantId);
+  const v = await getVariant(variantId);
   if (!v) throw new Error(`Variant not found: ${variantId}`);
   if (productId !== undefined && productId !== null && v.productId !== productId) {
     throw new Error(`Stock integrity error: variant ${variantId} belongs to product ${v.productId}, not ${productId}`);
   }
 
   const pid = productId ?? v.productId;
-  const prod = await db.products.get(pid);
+  const prod = await getProduct(pid);
   const packSz = effectivePackSz(v, prod);
   const isBulk = (prod?.inventoryMode ?? 'packed') === 'bulk';
 
@@ -72,24 +73,24 @@ export async function adjustStock({ variantId, productId, packsDelta, type, refe
 
   if (isHybridSale) {
     // Deduct from variant.stockQty (packaged stock). masterStock is unchanged.
-    await db.productVariants.update(variantId, { stockQty: newBase });
+    await updateVariant(variantId, { stockQty: newBase });
   } else if (isBulk) {
-    await db.products.update(pid, { masterStock: newBase });
+    await updateProduct(pid, { masterStock: newBase });
     if (packsDelta > 0 && unitCost !== null && unitCost >= 0) {
       // BULK WAC: derive cost per base unit so all sibling variants stay consistent.
       // Example: 1KG variant averageCost = ₹50 → costPerBase = ₹50/KG
       //          2KG sibling variant     → averageCost = ₹50 × 2 = ₹100
       const costPerBase = newAverageCost / packSz;
-      const siblings = await db.productVariants.where('productId').equals(pid).toArray();
+      const siblings = await listVariantsByProduct(pid);
       for (const sib of siblings) {
         const sibPackSz = effectivePackSz(sib, prod);
-        await db.productVariants.update(sib.id, {
+        await updateVariant(sib.id, {
           averageCost: costPerBase * sibPackSz,
           ...(sib.id === variantId ? { purchasePrice: unitCost } : {}),
         });
       }
       // Cache base cost on product for reporting convenience
-      await db.products.update(pid, { masterStock: newBase, avgCostPerBase: costPerBase });
+      await updateProduct(pid, { masterStock: newBase, avgCostPerBase: costPerBase });
     }
   } else {
     // PACKED mode
@@ -98,10 +99,10 @@ export async function adjustStock({ variantId, productId, packsDelta, type, refe
       variantUpdate.averageCost = newAverageCost;
       variantUpdate.purchasePrice = unitCost;
     }
-    await db.productVariants.update(variantId, variantUpdate);
+    await updateVariant(variantId, variantUpdate);
   }
 
-  await db.stockLedger.add({
+  await createStockLedgerEntry({
     variantId,
     productId: pid,
     type,
@@ -121,7 +122,6 @@ export async function adjustStock({ variantId, productId, packsDelta, type, refe
 /**
  * Convert bulk raw stock into individual packed variants.
  * Deducts total base units from products.masterStock and credits each variant's stockQty.
- * Must be called inside a Dexie 'rw' transaction covering db.products, db.productVariants, db.stockLedger.
  *
  * @param {object} params
  * @param {number} params.productId        - ID of the BULK product
@@ -130,7 +130,7 @@ export async function adjustStock({ variantId, productId, packsDelta, type, refe
  * @param {string} [params.note]           - Optional notes
  */
 export async function packageStock({ productId, packagingItems, reference = '', note = '' }) {
-  const prod = await db.products.get(productId);
+  const prod = await getProduct(productId);
   if (!prod) throw new Error(`Product not found: ${productId}`);
   if ((prod.inventoryMode ?? 'packed') !== 'bulk') {
     throw new Error('Packaging is only available for BULK inventory products');
@@ -143,7 +143,7 @@ export async function packageStock({ productId, packagingItems, reference = '', 
   for (const { variantId, qty } of packagingItems) {
     const packs = Number(qty) || 0;
     if (packs <= 0) continue;
-    const v = await db.productVariants.get(variantId);
+    const v = await getVariant(variantId);
     if (!v || v.productId !== productId) throw new Error(`Variant ${variantId} does not belong to product ${productId}`);
     const packSz = effectivePackSz(v, prod);
     const baseUnits = packs * packSz;
@@ -165,12 +165,12 @@ export async function packageStock({ productId, packagingItems, reference = '', 
   const ref = reference || `PKG-${Date.now()}`;
   const newMasterStock = masterStock - totalBaseUnitsNeeded;
 
-  await db.products.update(productId, { masterStock: newMasterStock });
+  await updateProduct(productId, { masterStock: newMasterStock });
 
   for (const { v, packs, packSz, baseUnits } of resolvedItems) {
     const newVariantStock = (v.stockQty || 0) + baseUnits;
-    await db.productVariants.update(v.id, { stockQty: newVariantStock });
-    await db.stockLedger.add({
+    await updateVariant(v.id, { stockQty: newVariantStock });
+    await createStockLedgerEntry({
       variantId: v.id,
       productId,
       type: 'packaging',
