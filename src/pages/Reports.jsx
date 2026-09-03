@@ -1,6 +1,14 @@
 import { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, getSetting } from '../db/db';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { getCompany } from '../api/company';
+import { listInvoices } from '../api/invoices';
+import { listExpenses } from '../api/expenses';
+import { listParties } from '../api/parties';
+import { listTransactions } from '../api/transactions';
+import { listVariants } from '../api/variants';
+import { listProducts } from '../api/products';
+import { listStockLedger } from '../api/stockLedger';
 import { BarChart2, FileText, IndianRupee, TrendingUp, TrendingDown, AlertTriangle, Download, Clock, BookOpen, Package } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -78,13 +86,13 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 export default function Reports() {
-  const invoices = useLiveQuery(() => db.invoices.toArray());
-  const expenses = useLiveQuery(() => db.expenses.toArray());
-  const parties = useLiveQuery(() => db.parties.toArray());
-  const transactions = useLiveQuery(() => db.transactions.toArray());
-  const variants = useLiveQuery(() => db.productVariants.toArray());
-  const products = useLiveQuery(() => db.products.toArray());
-  const stockLedger = useLiveQuery(() => db.stockLedger.toArray());
+  const invoices = useTable(QK.invoices, listInvoices);
+  const expenses = useTable(QK.expenses, listExpenses);
+  const parties = useTable(QK.parties, listParties);
+  const transactions = useTable(QK.transactions, listTransactions);
+  const variants = useTable(QK.variants, listVariants);
+  const products = useTable(QK.products, listProducts);
+  const stockLedger = useTable(QK.stockLedger, listStockLedger);
 
   const toast = useToast();
 
@@ -222,7 +230,7 @@ export default function Reports() {
       map[inv.partyId] = (map[inv.partyId] || 0) + (inv.total || 0);
     });
     return Object.entries(map)
-      .map(([id, amt]) => ({ party: parties?.find(p => p.id === Number(id)), amt }))
+      .map(([id, amt]) => ({ party: parties?.find(p => p.id === id), amt }))
       .sort((a, b) => b.amt - a.amt)
       .slice(0, 10);
   }, [filteredSales, parties]);
@@ -523,7 +531,7 @@ export default function Reports() {
 
   const exportGSTR1JSON = async () => {
     try {
-      const company = await getSetting('company', {});
+      const company = await getCompany() ?? {};
       const companyGstin = company?.gstin || '';
       const companyStateCode = companyGstin?.slice(0, 2) || '00';
 
@@ -568,7 +576,7 @@ export default function Reports() {
         if (buyerGstin && buyerGstin.length >= 15) {
           if (!b2bMap[buyerGstin]) b2bMap[buyerGstin] = { ctin: buyerGstin, inv: [] };
           b2bMap[buyerGstin].inv.push({
-            inum: inv.invoiceNumber || String(inv.id),
+            inum: inv.invoiceNumber || inv.id,
             idt,
             val: Math.round((inv.total || 0) * 100) / 100,
             pos,
@@ -627,7 +635,7 @@ export default function Reports() {
 
   const exportGSTR3BJSON = async () => {
     try {
-      const company = await getSetting('company', {});
+      const company = await getCompany() ?? {};
       const companyGstin = company?.gstin || '';
       const refDate = dateFrom ? new Date(dateFrom) : new Date();
       const retPeriod = String(refDate.getMonth() + 1).padStart(2, '0') + refDate.getFullYear();
