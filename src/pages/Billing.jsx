@@ -1,6 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, getSetting, getNextInvoiceNumber } from '../db/db';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { listParties, createParty } from '../api/parties';
+import { listProducts } from '../api/products';
+import { listVariants } from '../api/variants';
+import { listInvoices, createInvoice, updateInvoice, deleteInvoice } from '../api/invoices';
+import { createInvoiceItem, listItemsByInvoice, deleteItemsByInvoice } from '../api/invoiceItems';
+import { createTransaction, deleteTransaction, listTransactionsByInvoice } from '../api/transactions';
+import { listBatchesByVariant, updateBatch } from '../api/batches';
+import { createPurchase } from '../api/purchases';
+import { getCompany, nextInvoiceNumber, nextNoteNumber, formatInvoiceNumber } from '../api/company';
 import { adjustStock } from '../services/stockService';
 import { Download, Plus, Trash2, Eye, FileText, CheckCircle, List, Bell, Printer } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -433,10 +443,11 @@ const STATUS_OPTIONS = ['Pending', 'Paid', 'Partial', 'Cancelled', 'Draft'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Credit'];
 
 export default function Billing() {
-  const parties = useLiveQuery(() => db.parties.toArray());
-  const products = useLiveQuery(() => db.products.toArray());
-  const productVariants = useLiveQuery(() => db.productVariants.toArray());
-  const invoices = useLiveQuery(() => db.invoices.orderBy('id').reverse().toArray());
+  const qc = useQueryClient();
+  const parties = useTable(QK.parties, listParties);
+  const products = useTable(QK.products, listProducts);
+  const productVariants = useTable(QK.variants, listVariants);
+  const invoices = useTable(QK.invoices, listInvoices);   // already date-desc
 
   const variantsForBilling = useMemo(() => {
     if (!productVariants || !products) return [];
@@ -520,7 +531,7 @@ export default function Billing() {
   }, [statusFilter, fromDate, toDate]);
 
   useEffect(() => {
-    getSetting('company', {}).then(c => {
+    getCompany().then(c => {
       setCompanyGstin(c?.gstin || '');
       setCompanyUpiId(c?.upiId || '');
       setCompanyName(c?.name || '');
@@ -650,7 +661,7 @@ export default function Billing() {
 
   const addItem = () => {
     if (!selectedProduct) return;
-    const v = variantsForBilling?.find(v => v.id.toString() === selectedProduct);
+    const v = variantsForBilling?.find(v => v.id === selectedProduct);
     if (!v) return;
     const rate = v.sellingPrice;
     const qty = Math.max(1, parseInt(quantityStr) || 1);
@@ -725,8 +736,8 @@ export default function Billing() {
   const grandTotal = totals.subtotal + totals.taxAmount + shipAmt;
 
   // Detect inter-state: compare first 2 digits of seller vs buyer GSTIN
-  const selectedPartyObj = parties?.find(p => p.id.toString() === selectedParty);
-  const selectedProductObj = variantsForBilling?.find(v => v.id.toString() === selectedProduct);
+  const selectedPartyObj = parties?.find(p => p.id === selectedParty);
+  const selectedProductObj = variantsForBilling?.find(v => v.id === selectedProduct);
   const partyStateCode = getStateCode(selectedPartyObj?.gstin);
   const companyStateCode = getStateCode(companyGstin);
   const isInterState = !!(partyStateCode && companyStateCode && partyStateCode !== companyStateCode);
@@ -734,7 +745,7 @@ export default function Billing() {
 
   // Core save: persists invoice + updates stock. Returns saved data for printing.
   const handleSaveInvoice = async () => {
-    const party = parties?.find(p => p.id.toString() === selectedParty);
+    const party = parties?.find(p => p.id === selectedParty);
     if (!party) { toast('Select a customer/vendor first', 'warning'); return; }
     if (invoiceItems.length === 0) { toast('Add at least one item', 'warning'); return; }
 
@@ -756,10 +767,7 @@ export default function Billing() {
 
       // Credit limit check: sum all unpaid sales invoices for this party
       if (party.creditLimit > 0) {
-        const unpaidInvoices = await db.invoices
-          .where('[partyId+status]').equals([party.id, 'Pending'])
-          .filter(inv => inv.type === 'Sales')
-          .toArray();
+        const unpaidInvoices = invoices.filter(i => i.partyId === party.id && i.status === 'Pending' && i.type === 'Sales');
         const outstandingTotal = unpaidInvoices.reduce((s, inv) => s + (inv.total || 0), 0);
         const invoiceTotal = totals.subtotal + totals.taxAmount;
         if (outstandingTotal + invoiceTotal > party.creditLimit) {
@@ -775,9 +783,8 @@ export default function Billing() {
 
     setSaving(true);
     try {
-      const company = await getSetting('company', {});
-      const defaultTheme = await getSetting('invoiceTheme', 'classic');
-      const invoiceNumber = await getNextInvoiceNumber();
+      const company = (await getCompany()) ?? {};
+      const defaultTheme = localStorage.getItem('lekhya_theme_invoice') || 'classic';
 
       const freshCompanyGstin = company?.gstin || '';
       const freshCompanyState = getStateCode(freshCompanyGstin);
@@ -812,7 +819,6 @@ export default function Billing() {
         : paymentStatus;
 
       const invoiceRecord = {
-        invoiceNumber,
         type: invoiceType,
         partyId: party.id,
         date: new Date().toISOString(),
@@ -831,88 +837,103 @@ export default function Billing() {
         notes: notes.trim() || null,
         terms: terms.trim() || null,
         theme: invoiceTheme || defaultTheme,
-        lineItems
       };
 
       // Draft/Cancelled invoices are not real sales — no stock movement, no purchase
       // record, no payment transaction. Only Pending/Paid/Partial count as a sale.
       const isRealSale = computedStatus !== 'Draft' && computedStatus !== 'Cancelled';
 
-      await db.transaction('rw', db.invoices, db.productVariants, db.products, db.purchases, db.stockLedger, db.batches, async () => {
-        if (draftId) {
-          await db.invoices.update(draftId, invoiceRecord);
-        } else {
-          await db.invoices.add(invoiceRecord);
-        }
-        if (!isRealSale) return;
-        const isPurchase = invoiceType === 'Purchase';
-        for (const item of invoiceItems) {
-          await adjustStock({
-            variantId: item.id,
-            productId: item.productId,
-            packsDelta: isPurchase ? item.qty : -item.qty,
-            type: isPurchase ? 'purchase' : 'sale',
-            reference: invoiceNumber,
-            unitCost: isPurchase ? (item.rate ?? item.basePrice ?? 0) : null,
-          });
-          if (isPurchase) {
-            await db.purchases.add({
-              productId: item.productId,
-              variantId: item.id,
-              vendorId: party.id,
-              date: new Date().toISOString(),
-              qty: item.qty,
-              purchasePrice: item.rate || item.basePrice || 0,
-              notes: `Generated from purchase invoice ${invoiceNumber}`,
-            });
-          } else {
-            // FEFO batch deduction: deduct from earliest-expiring batches first
-            const batchesRaw = await db.batches
-              .where('variantId').equals(item.id)
-              .filter(b => b.status === 'active' && (b.remainingQty || 0) > 0)
-              .toArray();
-            const sortedBatches = batchesRaw.sort((a, b) => {
-              if (!a.expiryDate && !b.expiryDate) return 0;
-              if (!a.expiryDate) return 1;
-              if (!b.expiryDate) return -1;
-              return a.expiryDate.localeCompare(b.expiryDate);
-            });
-            let qtyToDeduct = item.qty;
-            for (const batch of sortedBatches) {
-              if (qtyToDeduct <= 0) break;
-              const deduct = Math.min(qtyToDeduct, batch.remainingQty);
-              const newRemaining = batch.remainingQty - deduct;
-              await db.batches.update(batch.id, {
-                remainingQty: newRemaining,
-                status: newRemaining <= 0 ? 'exhausted' : 'active',
-              });
-              qtyToDeduct -= deduct;
-            }
-          }
-        }
-      });
-
-      const persistedInvoice = await db.invoices.where('invoiceNumber').equals(invoiceNumber).first();
-
-      // Auto-record payment transactions
-      const validPmts = payments.filter(p => Number(p.amount) > 0);
-      if (isRealSale && validPmts.length > 0 && persistedInvoice) {
-        for (const pmt of validPmts) {
-          await db.transactions.add({
-            date: new Date().toISOString().slice(0, 10),
-            partyId: party.id,
-            invoiceId: persistedInvoice.id,
-            type: invoiceType === 'Sales' ? 'Payment In' : 'Payment Out',
-            amount: Number(pmt.amount),
-            method: pmt.method,
-            reference: invoiceNumber,
-            notes: `${invoiceType} invoice ${invoiceNumber}`,
-            autoRecorded: true,
-          });
+      // A draft being finalised also gets a real invoice number (its DRAFT-… placeholder is replaced).
+      let invoiceNumber, inv;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        invoiceNumber = await nextInvoiceNumber();
+        try {
+          inv = draftId
+            ? await updateInvoice(draftId, { ...invoiceRecord, invoiceNumber })
+            : await createInvoice({ ...invoiceRecord, invoiceNumber });
+          break;
+        } catch (e) {
+          // 23505 = unique violation on invoice_number (another tab grabbed the same seq)
+          if (String(e.message).includes('23505') && attempt < 2) continue;
+          throw e;
         }
       }
 
-      const invoiceForPrint = persistedInvoice || invoiceRecord;
+      const applied = [];
+      if (!draftId) applied.push(['invoice', inv.id]);
+      try {
+        if (draftId) await deleteItemsByInvoice(draftId);   // re-save of a draft: replace its items
+        for (const li of lineItems) await createInvoiceItem({ ...li, invoiceId: inv.id });
+
+        if (isRealSale) {
+          const isPurchase = invoiceType === 'Purchase';
+          for (const item of invoiceItems) {
+            await adjustStock({
+              variantId: item.id,
+              productId: item.productId,
+              packsDelta: isPurchase ? item.qty : -item.qty,
+              type: isPurchase ? 'purchase' : 'sale',
+              reference: invoiceNumber,
+              unitCost: isPurchase ? (item.rate ?? item.basePrice ?? 0) : null,
+            });
+            applied.push(['stock', { id: item.id, productId: item.productId, qty: item.qty, sign: isPurchase ? 1 : -1 }]);
+            if (isPurchase) {
+              await createPurchase({
+                productId: item.productId,
+                variantId: item.id,
+                vendorId: party.id,
+                date: new Date().toISOString(),
+                qty: item.qty,
+                purchasePrice: item.rate || item.basePrice || 0,
+                notes: `Generated from purchase invoice ${invoiceNumber}`,
+              });
+            } else {
+              // FEFO batch deduction: deduct from earliest-expiring active batches first
+              const active = (await listBatchesByVariant(item.id))
+                .filter(b => b.status === 'active' && (b.remainingQty || 0) > 0)
+                .sort((a, b) => (!a.expiryDate && !b.expiryDate) ? 0 : !a.expiryDate ? 1 : !b.expiryDate ? -1 : a.expiryDate.localeCompare(b.expiryDate));
+              let left = item.qty;
+              for (const b of active) {
+                if (left <= 0) break;
+                const d = Math.min(left, b.remainingQty);
+                const rem = b.remainingQty - d;
+                await updateBatch(b.id, { remainingQty: rem, status: rem <= 0 ? 'exhausted' : 'active' });
+                left -= d;
+              }
+            }
+          }
+        }
+
+        const validPmts = payments.filter(p => Number(p.amount) > 0);
+        if (isRealSale && validPmts.length) {
+          for (const pmt of validPmts) {
+            await createTransaction({
+              date: new Date().toISOString().slice(0, 10),
+              partyId: party.id,
+              invoiceId: inv.id,
+              type: invoiceType === 'Sales' ? 'Payment In' : 'Payment Out',
+              amount: Number(pmt.amount),
+              method: pmt.method,
+              reference: invoiceNumber,
+              notes: `${invoiceType} invoice ${invoiceNumber}`,
+              autoRecorded: true,
+            });
+          }
+        }
+      } catch (err) {
+        // Best-effort compensating cleanup, newest first. A pre-existing draft row is left alone.
+        for (const [kind, ref] of applied.reverse()) {
+          try {
+            if (kind === 'stock') await adjustStock({ variantId: ref.id, productId: ref.productId, packsDelta: -ref.sign * ref.qty, type: 'void', reference: `ROLLBACK:${invoiceNumber}` });
+            if (kind === 'invoice') { await deleteItemsByInvoice(ref); await deleteInvoice(ref); }
+          } catch { /* swallow — nothing better to do */ }
+        }
+        toast('Invoice save failed and was rolled back: ' + err.message, 'error');
+        return;
+      }
+
+      const persistedInvoice = inv;
+      const invoiceForPrint = persistedInvoice;
 
       // Store for deferred printing (Print PDF / POS buttons)
       setSavedInvoice({ invoice: invoiceForPrint, party, lineItems, company, finalTaxType, defaultTheme: invoiceTheme || defaultTheme });
@@ -930,6 +951,9 @@ export default function Billing() {
       setDraftId(null);
       setPayments([]);
       toast(`Invoice ${invoiceNumber} saved. Use the Print buttons below to generate your bill.`, 'success');
+      for (const k of [QK.invoices, QK.invoiceItems, QK.variants, QK.products, QK.purchases, QK.batches, QK.transactions, QK.stockLedger]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
       return { invoice: invoiceForPrint, party, lineItems, company, finalTaxType, defaultTheme: invoiceTheme || defaultTheme };
     } catch (err) {
       toast('Failed to save invoice: ' + err.message, 'error');
@@ -977,7 +1001,7 @@ export default function Billing() {
 
   // Preview: render the current (unsaved) invoice as a PDF in a modal
   const handlePreview = async () => {
-    const party = parties?.find(p => p.id.toString() === selectedParty);
+    const party = parties?.find(p => p.id === selectedParty);
     if (!party) { toast('Select a customer/vendor first', 'warning'); return; }
     if (invoiceItems.length === 0) { toast('Add at least one item', 'warning'); return; }
     for (const item of invoiceItems) {
@@ -985,11 +1009,10 @@ export default function Billing() {
     }
     setSaving(true);
     try {
-      const company = await getSetting('company', {});
-      const prefix = await getSetting('invoicePrefix', 'INV');
-      const seq = (await db.settings.get('invoiceSeq'))?.value || 0;
-      // read-only peek — do NOT call getNextInvoiceNumber (it increments the sequence)
-      const peekNumber = `${prefix}-${new Date().getFullYear()}-${String(seq + 1).padStart(4, '0')}`;
+      const co = await getCompany();
+      const company = co ?? {};
+      // read-only peek — do NOT call nextInvoiceNumber (it increments the sequence)
+      const peekNumber = formatInvoiceNumber(co?.invoicePrefix || 'INV', new Date().getFullYear(), (co?.invoiceSeq || 0) + 1);
       const { invoice, lineItems } = buildDraftForPdf(peekNumber);
       const doc = await buildPDF(invoice, party, lineItems, company, invoiceTheme, taxType);
       setPreviewUrl(doc.output('bloburl').toString());
@@ -1042,7 +1065,6 @@ export default function Billing() {
     if (!selectedParty && invoiceItems.length === 0) { toast('Add party or items before saving draft', 'warning'); return; }
     setSaving(true);
     try {
-      const company = await getSetting('company', {});
       const lineItems = invoiceItems.map(item => ({
         variantId: item.id, productId: item.productId,
         productName: item.productName, packSize: item.packSz,
@@ -1053,9 +1075,9 @@ export default function Billing() {
         sellingPrice: item.sellingPrice, gstRate: item.gstRate,
         qty: item.qty, unit: item.unit, itemDiscountPct: item.itemDiscountPct || 0,
       }));
-      const party = parties?.find(p => p.id.toString() === selectedParty);
+      const party = parties?.find(p => p.id === selectedParty);
       const draftRecord = {
-        invoiceNumber: draftId ? undefined : `DRAFT-${new Date().toISOString().replace(/[:.]/g, '-')}`,
+        ...(draftId ? {} : { invoiceNumber: `DRAFT-${new Date().toISOString().replace(/[:.]/g, '-')}` }),
         type: invoiceType,
         partyId: party?.id || null,
         date: new Date().toISOString(),
@@ -1073,16 +1095,24 @@ export default function Billing() {
         notes: notes.trim() || null,
         terms: terms.trim() || null,
         theme: invoiceTheme,
-        lineItems,
       };
+      let targetId = draftId;
       if (draftId) {
-        await db.invoices.update(draftId, draftRecord);
+        await updateInvoice(draftId, draftRecord);
+        await deleteItemsByInvoice(draftId);
+      } else {
+        const d = await createInvoice(draftRecord);
+        targetId = d.id;
+      }
+      for (const li of lineItems) await createInvoiceItem({ ...li, invoiceId: targetId });
+      if (draftId) {
         toast('Draft updated', 'success');
       } else {
-        const id = await db.invoices.add(draftRecord);
-        setDraftId(id);
+        setDraftId(targetId);
         toast('Draft saved — resume from History tab', 'success');
       }
+      qc.invalidateQueries({ queryKey: [QK.invoices] });
+      qc.invalidateQueries({ queryKey: [QK.invoiceItems] });
     } catch (err) {
       toast('Draft save failed: ' + err.message, 'error');
     } finally {
@@ -1090,7 +1120,14 @@ export default function Billing() {
     }
   };
 
-  const handleResumeDraft = (inv) => {
+  const handleResumeDraft = async (inv) => {
+    let items;
+    try {
+      items = await listItemsByInvoice(inv.id);
+    } catch (err) {
+      toast('Could not load draft items: ' + err.message, 'error');
+      return;
+    }
     // Save current bill to held if it has content
     const snap = captureBillSnapshot();
     if (snap.invoiceItems.length > 0 || snap.selectedParty) {
@@ -1100,9 +1137,9 @@ export default function Billing() {
     setNextBillId(id => id + 1);
     setActiveBillId(newId);
     // Load draft into new tab
-    setSelectedParty(inv.partyId?.toString() || '');
+    setSelectedParty(inv.partyId || '');
     setPartySearch('');
-    setInvoiceItems((inv.lineItems || []).map(item => ({ ...item, id: item.variantId || item.productId, itemDiscountPct: item.itemDiscountPct || 0 })));
+    setInvoiceItems(items.map(item => ({ ...item, id: item.variantId || item.productId, itemDiscountPct: item.itemDiscountPct || 0 })));
     setDiscountPct(inv.discountPct?.toString() || '');
     setShipping(inv.shipping?.toString() || '');
     setDueDate(inv.dueDate ? inv.dueDate.split('T')[0] : '');
@@ -1117,10 +1154,16 @@ export default function Billing() {
     toast('Draft loaded in a new tab — review and save to finalise', 'info');
   };
 
-  const handleOpenNoteModal = (inv) => {
+  const handleOpenNoteModal = async (inv) => {
     const noteType = inv.type === 'Purchase' ? 'DebitNote' : 'CreditNote';
-    setNoteModal({ inv, noteType });
-    setNoteReturnItems((inv.lineItems || []).map(item => ({ ...item, returnQty: item.qty })));
+    try {
+      const items = await listItemsByInvoice(inv.id);
+      if (!items.length) { toast('Line item data not available for this invoice', 'warning'); return; }
+      setNoteReturnItems(items.map(item => ({ ...item, returnQty: item.qty })));
+      setNoteModal({ inv, noteType });
+    } catch (err) {
+      toast('Could not load invoice items: ' + err.message, 'error');
+    }
   };
 
   const handleConfirmNote = async () => {
@@ -1130,13 +1173,11 @@ export default function Billing() {
 
     // Cumulative return validation — sum all prior returns for this invoice to prevent over-returning
     try {
-      const priorNotes = await db.invoices
-        .where('type').equals(noteType)
-        .filter(n => n.refInvoiceNumber === inv.invoiceNumber)
-        .toArray();
+      const priorNotes = (await listInvoices()).filter(n => n.type === noteType && n.refInvoiceNumber === inv.invoiceNumber);
       const alreadyReturned = {};
       for (const prior of priorNotes) {
-        for (const li of (prior.lineItems || [])) {
+        const its = await listItemsByInvoice(prior.id);
+        for (const li of its) {
           if (li.variantId) alreadyReturned[li.variantId] = (alreadyReturned[li.variantId] || 0) + (li.qty || 0);
         }
       }
@@ -1159,14 +1200,9 @@ export default function Billing() {
 
     setSaving(true);
     try {
-      const company = await getSetting('company', {});
+      const company = (await getCompany()) ?? {};
       const party = parties?.find(p => p.id === inv.partyId);
-      const noteSeqKey = noteType === 'CreditNote' ? 'creditNoteSeq' : 'debitNoteSeq';
-    const notePrefix = noteType === 'CreditNote' ? 'CN' : 'DN';
-    const noteSeqRecord = await db.settings.get(noteSeqKey);
-    const noteSeq = (noteSeqRecord?.value || 0) + 1;
-    await db.settings.put({ key: noteSeqKey, value: noteSeq });
-    const noteNumber = `${notePrefix}-${new Date().getFullYear()}-${String(noteSeq).padStart(4, '0')}`;
+      const noteNumber = await nextNoteNumber(noteType);
       const invDiscPctVal = inv.discountPct || 0;
 
       let noteSubtotal = 0, noteTax = 0;
@@ -1200,18 +1236,16 @@ export default function Billing() {
         total: noteSubtotal + noteTax,
         status: 'Issued',
         notes: `Return against ${inv.invoiceNumber}`,
-        lineItems,
       };
 
-      await db.transaction('rw', db.invoices, db.productVariants, db.products, db.stockLedger, async () => {
-        await db.invoices.add(noteRecord);
+      const noteInv = await createInvoice(noteRecord);
+      const noteApplied = [['invoice', noteInv.id]];
+      try {
+        for (const li of lineItems) await createInvoiceItem({ ...li, invoiceId: noteInv.id });
         const isCreditNote = noteType === 'CreditNote';
         for (const item of lineItems) {
           let variantId = item.variantId;
-          if (!variantId && item.productId) {
-            const v = await db.productVariants.where('productId').equals(item.productId).first();
-            variantId = v?.id;
-          }
+          if (!variantId && item.productId) variantId = productVariants.find(v => v.productId === item.productId)?.id;
           if (variantId) {
             await adjustStock({
               variantId,
@@ -1220,14 +1254,33 @@ export default function Billing() {
               type: isCreditNote ? 'credit-note' : 'debit-note',
               reference: noteNumber,
             });
+            noteApplied.push(['stock', { id: variantId, productId: item.productId, qty: item.qty, sign: isCreditNote ? 1 : -1 }]);
           }
         }
-      });
+      } catch (err) {
+        for (const [kind, ref] of noteApplied.reverse()) {
+          try {
+            if (kind === 'stock') await adjustStock({ variantId: ref.id, productId: ref.productId, packsDelta: -ref.sign * ref.qty, type: 'void', reference: `ROLLBACK:${noteNumber}` });
+            if (kind === 'invoice') { await deleteItemsByInvoice(ref); await deleteInvoice(ref); }
+          } catch { /* swallow */ }
+        }
+        toast('Failed to issue note (rolled back): ' + err.message, 'error');
+        return;
+      }
 
-      const doc = await buildPDF(noteRecord, party, lineItems, company, inv.theme || 'classic', inv.taxType || 'CGST_SGST');
-      doc.save(`${noteNumber}.pdf`);
+      // PDF is a courtesy — a failure here must not undo a committed note.
+      try {
+        const doc = await buildPDF(noteRecord, party, lineItems, company, inv.theme || 'classic', inv.taxType || 'CGST_SGST');
+        doc.save(`${noteNumber}.pdf`);
+      } catch (pdfErr) {
+        console.warn('[Note] PDF generation failed:', pdfErr.message);
+        toast('Note issued, but PDF generation failed: ' + pdfErr.message, 'warning');
+      }
       setNoteModal(null);
       toast(`${noteType === 'CreditNote' ? 'Credit Note' : 'Debit Note'} ${noteNumber} issued`, 'success');
+      for (const k of [QK.invoices, QK.invoiceItems, QK.variants, QK.products, QK.stockLedger]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
     } catch (err) {
       toast('Failed to issue note: ' + err.message, 'error');
     } finally {
@@ -1238,9 +1291,10 @@ export default function Billing() {
   const handleReprintPDF = async (inv) => {
     const party = parties?.find(p => p.id === inv.partyId);
     if (!party) { toast('Party not found', 'error'); return; }
-    if (!inv.lineItems?.length) { toast('Line item data not available for this invoice', 'warning'); return; }
-    const company = await getSetting('company', {});
-    const doc = await buildPDF(inv, party, inv.lineItems, company, inv.theme || 'classic', inv.taxType || 'CGST_SGST');
+    const items = await listItemsByInvoice(inv.id);
+    if (!items.length) { toast('Line item data not available for this invoice', 'warning'); return; }
+    const company = (await getCompany()) ?? {};
+    const doc = await buildPDF(inv, party, items, company, inv.theme || 'classic', inv.taxType || 'CGST_SGST');
     doc.save(`${inv.invoiceNumber || `INV-${inv.id}`}.pdf`);
     toast('PDF downloaded', 'success');
   };
@@ -1248,9 +1302,10 @@ export default function Billing() {
   const handleReprintPOS = async (inv) => {
     const party = parties?.find(p => p.id === inv.partyId);
     if (!party) { toast('Party not found', 'error'); return; }
-    if (!inv.lineItems?.length) { toast('Line item data not available for this invoice', 'warning'); return; }
-    const company = await getSetting('company', {});
-    printPOSReceipt(inv, party, inv.lineItems, company);
+    const items = await listItemsByInvoice(inv.id);
+    if (!items.length) { toast('Line item data not available for this invoice', 'warning'); return; }
+    const company = (await getCompany()) ?? {};
+    printPOSReceipt(inv, party, items, company);
   };
 
   // Marking Paid must also settle the ledger — otherwise Payments/Ledger pages
@@ -1258,30 +1313,32 @@ export default function Billing() {
   const handleStatusChange = async (inv, newStatus) => {
     try {
       if (newStatus === 'Paid') {
-        const relatedTxns = await db.transactions.where('invoiceId').equals(inv.id).toArray();
+        const relatedTxns = await listTransactionsByInvoice(inv.id);
         const alreadyPaid = relatedTxns.reduce((s, t) => s + (t.amount || 0), 0);
         const remaining = (inv.total || 0) - alreadyPaid;
         if (remaining > 0.01) {
-          await db.transaction('rw', db.transactions, db.invoices, async () => {
-            await db.transactions.add({
-              date: new Date().toISOString().slice(0, 10),
-              partyId: inv.partyId,
-              invoiceId: inv.id,
-              type: inv.type === 'Purchase' ? 'Payment Out' : 'Payment In',
-              amount: remaining,
-              method: 'Other',
-              reference: inv.invoiceNumber || `INV-${inv.id}`,
-              notes: 'Balance settled — marked Paid from Invoice History',
-              autoRecorded: true,
-            });
-            await db.invoices.update(inv.id, { status: newStatus });
+          await createTransaction({
+            date: new Date().toISOString().slice(0, 10),
+            partyId: inv.partyId,
+            invoiceId: inv.id,
+            type: inv.type === 'Purchase' ? 'Payment Out' : 'Payment In',
+            amount: remaining,
+            method: 'Other',
+            reference: inv.invoiceNumber || `INV-${inv.id}`,
+            notes: 'Balance settled — marked Paid from Invoice History',
+            autoRecorded: true,
           });
+          await updateInvoice(inv.id, { status: newStatus });
           toast(`Status updated to Paid — ₹${remaining.toLocaleString('en-IN')} recorded as payment`, 'success');
+          qc.invalidateQueries({ queryKey: [QK.transactions] });
+          qc.invalidateQueries({ queryKey: [QK.invoices] });
           return;
         }
       }
-      await db.invoices.update(inv.id, { status: newStatus });
+      await updateInvoice(inv.id, { status: newStatus });
       toast(`Status updated to ${newStatus}`, 'success');
+      qc.invalidateQueries({ queryKey: [QK.transactions] });
+      qc.invalidateQueries({ queryKey: [QK.invoices] });
     } catch (err) {
       toast('Failed to update status: ' + err.message, 'error');
     }
@@ -1294,33 +1351,45 @@ export default function Billing() {
     const reverseSign = { Sales: 1, Purchase: -1, CreditNote: -1, DebitNote: 1 };
     const sign = reverseSign[inv.type];
     try {
-      if (sign !== undefined && inv.lineItems?.length) {
-        await db.transaction('rw', db.invoices, db.productVariants, db.products, db.stockLedger, async () => {
-          for (const item of inv.lineItems) {
-            if (!item.variantId) continue;
-            try {
-              await adjustStock({
-                variantId: item.variantId,
-                productId: item.productId,
-                packsDelta: sign * item.qty,
-                type: 'void',
-                reference: `VOID:${inv.invoiceNumber || inv.id}`,
-                note: 'Invoice deleted',
-              });
-            } catch (stockErr) {
-              console.warn(`[Delete] Stock reversal skipped for variant ${item.variantId}:`, stockErr.message);
-            }
+      const items = await listItemsByInvoice(inv.id);
+
+      const linked = await listTransactionsByInvoice(inv.id);
+      for (const t of linked) await deleteTransaction(t.id);
+
+      if (sign !== undefined) {
+        for (const item of items) {
+          if (!item.variantId) continue;
+          try {
+            await adjustStock({
+              variantId: item.variantId,
+              productId: item.productId,
+              packsDelta: sign * item.qty,
+              type: 'void',
+              reference: `VOID:${inv.invoiceNumber || inv.id}`,
+              note: 'Invoice deleted',
+            });
+          } catch (stockErr) {
+            console.warn(`[Delete] Stock reversal skipped for variant ${item.variantId}:`, stockErr.message);
           }
-          await db.invoices.delete(inv.id);
-        });
-      } else {
-        await db.invoices.delete(inv.id);
+        }
       }
+      await deleteItemsByInvoice(inv.id);
+      await deleteInvoice(inv.id);
       setConfirmDeleteId(null);
       toast('Invoice deleted', 'success');
+      for (const k of [QK.invoices, QK.invoiceItems, QK.variants, QK.products, QK.transactions, QK.stockLedger]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
     } catch (err) {
       toast('Delete failed: ' + err.message, 'error');
     }
+  };
+
+  // Items live in invoice_items now, so the view modal fetches them alongside the row.
+  const openViewInvoice = async (inv) => {
+    let items = [];
+    try { items = await listItemsByInvoice(inv.id); } catch { /* modal shows "not available" */ }
+    setViewInvoice({ ...inv, items });
   };
 
   const copyReminder = (inv) => {
@@ -1335,14 +1404,15 @@ export default function Billing() {
     const msg = `Dear ${party?.name || 'Customer'},\n\nThis is a gentle reminder that invoice ${inv.invoiceNumber} for ${fmtINR(inv.total)} (dated ${fmtDate(inv.date)}) is currently outstanding.\n\nKindly arrange payment at your earliest convenience.\n\nThank you for your business.`;
     let phone = (party?.phone || '').replace(/\D/g, '');
     if (phone.length === 10) phone = '91' + phone;
-    if (inv.lineItems?.length) {
-      try {
-        const company = await getSetting('company', {});
-        const doc = await buildPDF(inv, party, inv.lineItems, company, inv.theme || 'classic', inv.taxType || 'CGST_SGST');
+    try {
+      const items = await listItemsByInvoice(inv.id);
+      if (items.length) {
+        const company = (await getCompany()) ?? {};
+        const doc = await buildPDF(inv, party, items, company, inv.theme || 'classic', inv.taxType || 'CGST_SGST');
         doc.save(`${inv.invoiceNumber || `INV-${inv.id}`}.pdf`);
         toast('Invoice PDF downloaded — attach it in WhatsApp', 'info');
-      } catch { /* non-fatal */ }
-    }
+      }
+    } catch { /* non-fatal */ }
     window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`, '_blank');
     setReminderInvId(null);
   };
@@ -1403,12 +1473,12 @@ export default function Billing() {
         <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
           {/* Active bill tab */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--primary)', color: '#fff', borderRadius: 6, padding: '0.375rem 0.625rem 0.375rem 0.875rem', fontSize: '0.8rem', fontWeight: 600 }}>
-            <span>Bill #{activeBillId}{selectedParty && parties ? ` — ${parties.find(p => p.id.toString() === selectedParty)?.name?.slice(0, 12) || ''}` : ''}</span>
+            <span>Bill #{activeBillId}{selectedParty && parties ? ` — ${parties.find(p => p.id === selectedParty)?.name?.slice(0, 12) || ''}` : ''}</span>
             <button onClick={() => closeBillTab(activeBillId)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', marginLeft: '0.5rem', lineHeight: 1, opacity: 0.8, fontSize: '0.85rem' }} title="Close this bill">✕</button>
           </div>
           {/* Held bill tabs */}
           {heldBills.map(b => {
-            const heldParty = b.selectedParty && parties ? parties.find(p => p.id.toString() === b.selectedParty) : null;
+            const heldParty = b.selectedParty && parties ? parties.find(p => p.id === b.selectedParty) : null;
             return (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.375rem 0.625rem 0.375rem 0.875rem', fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }}
                 onClick={() => switchBillTab(b.id)}>
@@ -1511,7 +1581,7 @@ export default function Billing() {
                         <div
                           key={p.id}
                           onMouseDown={() => {
-                            setSelectedParty(p.id.toString());
+                            setSelectedParty(p.id);
                             setPartySearch(p.name);
                             setShowPartyDropdown(false);
                           }}
@@ -1627,7 +1697,7 @@ export default function Billing() {
                               key={v.id}
                               onMouseDown={() => {
                                 if (outOfStock) return;
-                                setSelectedProduct(v.id.toString());
+                                setSelectedProduct(v.id);
                                 setProductSearch(v.name);
                                 setShowProductDropdown(false);
                               }}
@@ -2033,7 +2103,7 @@ export default function Billing() {
                     return (
                       <tr
                         key={inv.id}
-                        onClick={() => inv.status !== 'Draft' && setViewInvoice(inv)}
+                        onClick={() => inv.status !== 'Draft' && openViewInvoice(inv)}
                         style={{ cursor: inv.status !== 'Draft' ? 'pointer' : 'default', ...(overdue ? { background: 'rgba(239,68,68,0.04)' } : {}) }}
                       >
                         <td style={{ fontWeight: 600, fontSize: '0.875rem' }}>
@@ -2078,7 +2148,7 @@ export default function Billing() {
                               <button className="btn btn-primary" style={{ padding: '0.375rem 0.625rem', fontSize: '0.8rem' }} onClick={() => handleResumeDraft(inv)} title="Resume draft">Resume</button>
                             ) : (
                               <>
-                                <button className="btn btn-secondary" style={{ padding: '0.375rem 0.5rem', fontSize: '0.8rem' }} onClick={() => setViewInvoice(inv)} title="View invoice"><Eye size={14} /></button>
+                                <button className="btn btn-secondary" style={{ padding: '0.375rem 0.5rem', fontSize: '0.8rem' }} onClick={() => openViewInvoice(inv)} title="View invoice"><Eye size={14} /></button>
                                 <button className="btn btn-secondary" style={{ padding: '0.375rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleReprintPDF(inv)} title="Download A4 PDF"><Download size={14} /></button>
                                 <button className="btn btn-secondary" style={{ padding: '0.375rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleReprintPOS(inv)} title="Print POS / thermal receipt"><Printer size={14} /></button>
                               </>
@@ -2255,7 +2325,7 @@ export default function Billing() {
               )}
             </div>
 
-            {viewInvoice.lineItems?.length > 0 ? (
+            {viewInvoice.items?.length > 0 ? (
               <>
                 <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Items</h3>
                 <div className="table-container" style={{ marginBottom: '1rem' }}>
@@ -2264,7 +2334,7 @@ export default function Billing() {
                       <tr><th>Item</th><th>Qty</th><th>Rate</th><th>Disc%</th><th>GST%</th><th>Amount</th></tr>
                     </thead>
                     <tbody>
-                      {viewInvoice.lineItems.map((item, i) => {
+                      {viewInvoice.items.map((item, i) => {
                         const rate = item.rate || item.basePrice;
                         const invDiscPctV = viewInvoice.discountPct || 0;
                         const gross = rate * item.qty;
@@ -2330,7 +2400,7 @@ export default function Billing() {
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
               <button className="btn btn-secondary" onClick={() => setViewInvoice(null)}>Close</button>
-              {viewInvoice.lineItems?.length > 0 && (
+              {viewInvoice.items?.length > 0 && (
                 <button className="btn btn-primary" onClick={() => { handleReprintPDF(viewInvoice); setViewInvoice(null); }}>
                   <Download size={15} /> Download PDF
                 </button>
@@ -2440,11 +2510,12 @@ export default function Billing() {
             if (!phoneCheck.valid) { toast(phoneCheck.message, 'error'); return; }
 
             try {
-              const newId = await db.parties.add(data);
+              const np = await createParty(data);
               toast('Contact added successfully!', 'success');
-              setSelectedParty(newId.toString());
+              setSelectedParty(np.id);
               setPartySearch(data.name);
               setNewPartyModal(null);
+              qc.invalidateQueries({ queryKey: [QK.parties] });
             } catch (err) {
               toast('Failed to save contact: ' + err.message, 'error');
             }
