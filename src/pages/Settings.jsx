@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { db, getSetting, setSetting, verifyUser, updateUserPassword } from '../db/db';
 import { supabase } from '../lib/supabase';
-import { Save, Download, Upload, Trash2, Building2, Database, KeyRound, Palette, FileSpreadsheet, Shield, Smartphone, Cloud, CloudUpload, CloudDownload, CheckCircle, XCircle, Key, RefreshCw } from 'lucide-react';
+import { getCompany, updateCompany } from '../api/company';
+import { listParties } from '../api/parties';
+import { listProducts } from '../api/products';
+import { listInvoices } from '../api/invoices';
+import { listInvoiceItems } from '../api/invoiceItems';
+import { listLeads } from '../api/leads';
+import { listTransactions } from '../api/transactions';
+import { listExpenses } from '../api/expenses';
+import { listPurchases } from '../api/purchases';
+import { Save, Download, Building2, KeyRound, FileSpreadsheet, Shield, Smartphone, Key, RefreshCw } from 'lucide-react';
 import { useToast } from '../components/Toast';
-import { Modal } from '../components/Modal';
 import { validateGSTIN, validateIFSC, validatePhone, validateEmail } from '../utils/validators';
 import { getSubscription, evaluateAccess, daysRemaining, activateLicense, deactivateSubscription, PLAN_LABELS, TRIAL_DAYS } from '../lib/subscription';
 
@@ -33,7 +40,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  const [cpCurrent, setCpCurrent] = useState('');
   const [cpNew, setCpNew] = useState('');
   const [cpConfirm, setCpConfirm] = useState('');
   const [cpSaving, setCpSaving] = useState(false);
@@ -43,67 +49,21 @@ export default function Settings() {
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
   const [defaultTerms, setDefaultTerms] = useState('');
 
-  // Backup tracking
-  const [lastBackup, setLastBackup] = useState(null);
-
-  // Google Drive
-  const [gdriveClientId, setGdriveClientId] = useState('');
-  const [gdriveClientSecret, setGdriveClientSecret] = useState('');
-  const [gdriveConnected, setGdriveConnected] = useState(false);
-  const [gdriveEmail, setGdriveEmail] = useState('');
-  const [gdriveConnecting, setGdriveConnecting] = useState(false);
-  const [gdriveSyncing, setGdriveSyncing] = useState(false);
-  const [gdriveLastSync, setGdriveLastSync] = useState(null);
-  const [showClearModal, setShowClearModal] = useState(false);
-  const [clearPassword, setClearPassword] = useState('');
-  const [clearing, setClearing] = useState(false);
-
-  // Excel import modal state
-  const [xlsImport, setXlsImport] = useState(null); // { headers, rows, targetTable, mapping }
-  const [xlsImporting, setXlsImporting] = useState(false);
-
   // Subscription
   const [sub, setSub] = useState(null);
   const [subLicenseKey, setSubLicenseKey] = useState('');
   const [subActivating, setSubActivating] = useState(false);
 
-  const isElectron = !!window.electron?.isElectron;
-
   useEffect(() => {
-    Promise.all([
-      getSetting('company', defaultCompany),
-      getSetting('invoiceTheme', 'classic'),
-      getSetting('invoicePrefix', 'INV'),
-      getSetting('defaultTerms', ''),
-      getSetting('lastBackupDate', null),
-      getSetting('gdriveLastSync', null),
-      getSubscription(),
-    ]).then(([comp, theme, prefix, terms, backup, lastSync, subscription]) => {
-      setCompany(comp || defaultCompany);
-      setInvoiceTheme(theme || 'classic');
-      setInvoicePrefix(prefix || 'INV');
-      setDefaultTerms(terms || '');
-      setLastBackup(backup);
-      setGdriveLastSync(lastSync);
+    (async () => {
+      const [co, subscription] = await Promise.all([getCompany(), getSubscription()]);
+      setCompany(co ? { ...co, logo: co.logoUrl || '', bankIFSC: co.bankIfsc || '' } : defaultCompany);
+      setInvoiceTheme(localStorage.getItem('lekhya_theme_invoice') || 'classic');
+      setInvoicePrefix(co?.invoicePrefix || 'INV');
+      setDefaultTerms(co?.defaultTerms || '');
       setSub(subscription);
       setLoaded(true);
-    });
-
-    // Load Google Drive connection state
-    if (window.electron?.gdrive) {
-      window.electron.gdrive.getTokens().then(async (tokens) => {
-        if (!tokens) return;
-        setGdriveConnected(true);
-        setGdriveClientId(tokens.clientId || '');
-        try {
-          const token = await gdriveGetValidToken(tokens);
-          const info = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: { Authorization: `Bearer ${token}` },
-          }).then(r => r.json());
-          if (info.email) setGdriveEmail(info.email);
-        } catch { /* ignore — offline */ }
-      });
-    }
+    })();
   }, []);
 
   const set = (field, value) => setCompany(prev => ({ ...prev, [field]: value }));
@@ -156,28 +116,13 @@ export default function Settings() {
     if (!ifscCheck.valid) { toast(ifscCheck.message, 'error'); return; }
     setSaving(true);
     try {
-      await Promise.all([
-        setSetting('company', company),
-        setSetting('invoiceTheme', invoiceTheme),
-        setSetting('invoicePrefix', invoicePrefix),
-        setSetting('defaultTerms', defaultTerms),
-      ]);
-
-      // Sync company info to Supabase if connected
-      const companyId = localStorage.getItem('lekhya_company_id');
-      if (companyId) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { error } = await supabase.from('companies').update({
-            name: company.name,
-            gstin: company.gstin || null,
-            address: company.address || null,
-            phone: company.phone || null,
-            email: company.email || null,
-          }).eq('id', companyId);
-          if (error) console.error('[Settings] Supabase company sync error:', error.message);
-        }
-      }
+      await updateCompany({
+        name: company.name, gstin: company.gstin, address: company.address, phone: company.phone,
+        email: company.email, upiId: company.upiId, logoUrl: company.logo,
+        bankName: company.bankName, bankAccount: company.bankAccount, bankIfsc: company.bankIFSC,
+        invoicePrefix, defaultTerms,
+      });
+      localStorage.setItem('lekhya_theme_invoice', invoiceTheme);
 
       toast('Settings saved successfully!', 'success');
     } catch {
@@ -189,18 +134,14 @@ export default function Settings() {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
-    if (cpNew.length < 6) { toast('New password must be at least 6 characters', 'warning'); return; }
+    if (cpNew.length < 8) { toast('New password must be at least 8 characters', 'warning'); return; }
     if (cpNew !== cpConfirm) { toast('Passwords do not match', 'error'); return; }
     setCpSaving(true);
     try {
-      const stored = localStorage.getItem('lekhya_session') || localStorage.getItem('bizcrm_session');
-      const session = stored ? JSON.parse(stored) : null;
-      if (!session?.username) { toast('Session expired. Please log in again.', 'error'); return; }
-      const user = await verifyUser(session.username, cpCurrent);
-      if (!user) { toast('Current password is incorrect', 'error'); return; }
-      await updateUserPassword(user.id, cpNew);
+      const { error } = await supabase.auth.updateUser({ password: cpNew });
+      if (error) { toast('Failed to change password: ' + error.message, 'error'); return; }
       toast('Password changed successfully!', 'success');
-      setCpCurrent(''); setCpNew(''); setCpConfirm('');
+      setCpNew(''); setCpConfirm('');
     } catch (err) {
       toast('Failed to change password: ' + err.message, 'error');
     } finally {
@@ -211,14 +152,14 @@ export default function Settings() {
   const handleExport = async () => {
     try {
       const [parties, products, invoices, invoiceItemsData, leads, transactions, expenses, purchasesData] = await Promise.all([
-        db.parties.toArray(),
-        db.products.toArray(),
-        db.invoices.toArray(),
-        db.invoiceItems.toArray(),
-        db.leads.toArray(),
-        db.transactions.toArray(),
-        db.expenses.toArray(),
-        db.purchases.toArray(),
+        listParties(),
+        listProducts(),
+        listInvoices(),
+        listInvoiceItems(),
+        listLeads(),
+        listTransactions(),
+        listExpenses(),
+        listPurchases(),
       ]);
 
       const wb = XLSX.utils.book_new();
@@ -244,128 +185,15 @@ export default function Settings() {
       const date = new Date().toISOString().split('T')[0];
       XLSX.writeFile(wb, `lekhya-backup-${date}.xlsx`);
 
-      const now = new Date().toISOString();
-      await setSetting('lastBackupDate', now);
-      setLastBackup(now);
       toast('Full backup exported as Excel (multi-sheet)!', 'success');
     } catch (err) {
       toast('Export failed: ' + err.message, 'error');
     }
   };
 
-  const TABLE_SCHEMAS = {
-    parties:      ['name', 'type', 'gstin', 'phone', 'email', 'address'],
-    products:     ['name', 'hsn', 'unit', 'basePrice', 'margin', 'gstRate', 'currentStock', 'reorderPoint', 'description'],
-    invoices:     ['invoiceNumber', 'type', 'date', 'dueDate', 'status', 'subtotal', 'taxAmount', 'total', 'notes'],
-    expenses:     ['date', 'category', 'amount', 'vendor', 'description'],
-    transactions: ['date', 'type', 'amount', 'method', 'reference', 'notes'],
-    leads:        ['name', 'phone', 'email', 'source', 'status', 'notes'],
-    purchases:    ['date', 'qty', 'purchasePrice', 'notes'],
-  };
-
-  const handleXlsImportFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const wb = XLSX.read(ev.target.result, { type: 'array' });
-        const sheetName = wb.SheetNames[0];
-        const ws = wb.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        const headers = rows.length ? Object.keys(rows[0]) : [];
-        const targetTable = 'parties';
-        const dbCols = TABLE_SCHEMAS[targetTable];
-        const autoMap = {};
-        headers.forEach(h => {
-          const match = dbCols.find(c => c.toLowerCase() === h.toLowerCase());
-          if (match) autoMap[h] = match;
-          else autoMap[h] = '';
-        });
-        setXlsImport({ headers, rows, targetTable, mapping: autoMap });
-      } catch (err) {
-        toast('Could not read file: ' + err.message, 'error');
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = '';
-  };
-
-  const handleXlsImportExecute = async () => {
-    if (!xlsImport) return;
-    setXlsImporting(true);
-    try {
-      const { rows, targetTable, mapping } = xlsImport;
-      const table = db[targetTable];
-      if (!table) throw new Error(`Unknown table: ${targetTable}`);
-      const records = rows.map(row => {
-        const rec = {};
-        Object.entries(mapping).forEach(([csvCol, dbCol]) => {
-          if (dbCol) rec[dbCol] = row[csvCol];
-        });
-        return rec;
-      }).filter(r => Object.keys(r).length > 0);
-      await table.bulkPut(records);
-      toast(`Imported ${records.length} records into ${targetTable}`, 'success');
-      setXlsImport(null);
-    } catch (err) {
-      toast('Import failed: ' + err.message, 'error');
-    } finally {
-      setXlsImporting(false);
-    }
-  };
-
-  const restoreFromJSON = async (jsonContent) => {
-    const data = JSON.parse(jsonContent);
-    if (!data.exportedAt) throw new Error('Not a valid Lekhya One backup file');
-    await db.transaction('rw', db.parties, db.products, db.invoices, db.invoiceItems, db.leads, db.transactions, db.expenses, db.purchases, db.settings, async () => {
-      if (data.parties?.length) await db.parties.bulkPut(data.parties);
-      if (data.products?.length) await db.products.bulkPut(data.products);
-      if (data.invoices?.length) await db.invoices.bulkPut(data.invoices);
-      if (data.invoiceItems?.length) await db.invoiceItems.bulkPut(data.invoiceItems);
-      if (data.leads?.length) await db.leads.bulkPut(data.leads);
-      if (data.transactions?.length) await db.transactions.bulkPut(data.transactions);
-      if (data.expenses?.length) await db.expenses.bulkPut(data.expenses);
-      if (data.purchases?.length) await db.purchases.bulkPut(data.purchases);
-      if (data.settings?.length) await db.settings.bulkPut(data.settings);
-    });
-    const counts = [
-      data.parties?.length && `${data.parties.length} contacts`,
-      data.products?.length && `${data.products.length} products`,
-      data.invoices?.length && `${data.invoices.length} invoices`,
-    ].filter(Boolean).join(', ');
-    toast(`Restored: ${counts || 'all records'}.`, 'success');
-  };
-
-  const handleImport = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        await restoreFromJSON(ev.target.result);
-      } catch (err) {
-        toast('Import failed: ' + err.message, 'error');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleImportElectron = async () => {
-    try {
-      const content = await window.electron.backup.open();
-      if (!content) return;
-      await restoreFromJSON(content);
-    } catch (err) {
-      toast('Import failed: ' + err.message, 'error');
-    }
-  };
-
   const handleExportCSV = async () => {
     try {
-      const invoices = await db.invoices.toArray();
-      const parties = await db.parties.toArray();
+      const [invoices, parties] = await Promise.all([listInvoices(), listParties()]);
       const partyMap = {};
       parties.forEach(p => { partyMap[p.id] = p.name; });
 
@@ -400,11 +228,10 @@ export default function Settings() {
 
   const handleExportTally = async () => {
     try {
-      const invoices = await db.invoices.toArray();
-      const parties = await db.parties.toArray();
+      const [invoices, parties] = await Promise.all([listInvoices(), listParties()]);
       const partyMap = {};
       parties.forEach(p => { partyMap[p.id] = p; });
-      const co = await getSetting('company', {});
+      const co = await getCompany() ?? {};
 
       let xml = `<?xml version="1.0" encoding="utf-8"?>\n<ENVELOPE>\n  <HEADER>\n    <TALLYREQUEST>Import Data</TALLYREQUEST>\n  </HEADER>\n  <BODY>\n    <IMPORTDATA>\n      <REQUESTDESC>\n        <REPORTNAME>All Masters</REPORTNAME>\n        <STATICVARIABLES><SVCURRENTCOMPANY>${co.name || 'Company'}</SVCURRENTCOMPANY></STATICVARIABLES>\n      </REQUESTDESC>\n      <REQUESTDATA>\n`;
 
@@ -442,255 +269,6 @@ export default function Settings() {
       toast('Tally XML exported! Import in Tally: Gateway → Import Data → Vouchers', 'success');
     } catch {
       toast('Tally export failed', 'error');
-    }
-  };
-
-  const handleClearData = async () => {
-    setShowClearModal(true);
-    setClearPassword('');
-  };
-
-  const executeClearAllData = async (password) => {
-    setClearing(true);
-    try {
-      const stored = localStorage.getItem('lekhya_session') || localStorage.getItem('bizcrm_session');
-      const session = stored ? JSON.parse(stored) : null;
-      if (!session?.username) {
-        toast('Session expired. Please log in again.', 'error');
-        setClearing(false);
-        return;
-      }
-      const user = await verifyUser(session.username, password);
-      if (!user) {
-        toast('Incorrect password. Access denied.', 'error');
-        setClearing(false);
-        return;
-      }
-
-      // Password matches! Step 1: Export all data to local machine
-      const [parties, products, invoices, invoiceItemsData, leads, transactions, expenses, purchasesData, settingsData] = await Promise.all([
-        db.parties.toArray(),
-        db.products.toArray(),
-        db.invoices.toArray(),
-        db.invoiceItems.toArray(),
-        db.leads.toArray(),
-        db.transactions.toArray(),
-        db.expenses.toArray(),
-        db.purchases.toArray(),
-        db.settings.toArray(),
-      ]);
-      const data = {
-        parties, products, invoices,
-        invoiceItems: invoiceItemsData,
-        leads, transactions, expenses,
-        purchases: purchasesData,
-        settings: settingsData,
-        exportedAt: new Date().toISOString(),
-        version: 4,
-        appVersion: window.electron?.appVersion || '1.0.0',
-      };
-      const jsonContent = JSON.stringify(data, null, 2);
-
-      // Trigger automatic backup download
-      if (isElectron && window.electron?.backup) {
-        await window.electron.backup.save(jsonContent);
-      } else {
-        const blob = new Blob([jsonContent], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `lekhya-backup-before-clear-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-
-      // Step 2: Delete all local tables
-      await db.transaction('rw', db.invoices, db.parties, db.products, db.leads, db.transactions, db.expenses, db.purchases, db.invoiceItems, async () => {
-        await db.invoices.clear();
-        await db.parties.clear();
-        await db.products.clear();
-        await db.leads.clear();
-        await db.transactions.clear();
-        await db.expenses.clear();
-        await db.purchases.clear();
-        await db.invoiceItems.clear();
-      });
-      await setSetting('invoiceSeq', 0);
-
-      // Step 3: Hard-delete all records from Supabase
-      const companyId = localStorage.getItem('lekhya_company_id');
-      if (companyId) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const cloudTables = ['parties', 'products', 'invoices', 'invoice_items', 'transactions', 'expenses', 'purchases'];
-          await Promise.all(
-            cloudTables.map(tbl =>
-              supabase.from(tbl).delete().eq('company_id', companyId)
-                .then(({ error }) => { if (error) console.error(`[Clear] Supabase delete error on ${tbl}:`, error.message); })
-            )
-          );
-        }
-      }
-
-      toast('Full backup exported and all data cleared successfully!', 'warning');
-      setShowClearModal(false);
-    } catch (err) {
-      toast('Failed to clear data: ' + err.message, 'error');
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  // ── Google Drive helpers ────────────────────────────────────────
-
-  async function gdriveGetValidToken(tokens) {
-    if (!tokens) throw new Error('Not connected to Google Drive');
-    if (Date.now() < tokens.expiry_date - 60000) return tokens.access_token;
-    const res = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: tokens.clientId,
-        client_secret: tokens.clientSecret,
-        refresh_token: tokens.refresh_token,
-        grant_type: 'refresh_token',
-      }).toString(),
-    });
-    const refreshed = await res.json();
-    if (refreshed.error) throw new Error(refreshed.error_description || refreshed.error);
-    const updated = {
-      ...tokens,
-      access_token: refreshed.access_token,
-      expires_in: refreshed.expires_in,
-      expiry_date: Date.now() + (refreshed.expires_in || 3600) * 1000,
-    };
-    await window.electron.gdrive.saveTokens(updated);
-    return updated.access_token;
-  }
-
-  async function gdriveFindBackup(accessToken) {
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='lekhya-backup.json' and trashed=false")}&fields=files(id,name,modifiedTime)`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    const data = await res.json();
-    return data.files?.[0] || null;
-  }
-
-  const handleGDriveConnect = async () => {
-    if (!gdriveClientId.trim() || !gdriveClientSecret.trim()) {
-      toast('Please enter both Client ID and Client Secret', 'warning');
-      return;
-    }
-    setGdriveConnecting(true);
-    try {
-      const tokens = await window.electron.gdrive.startAuth({
-        clientId: gdriveClientId.trim(),
-        clientSecret: gdriveClientSecret.trim(),
-      });
-      setGdriveConnected(true);
-      setGdriveClientSecret('');
-      const info = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
-      }).then(r => r.json());
-      if (info.email) setGdriveEmail(info.email);
-      toast('Connected to Google Drive successfully!', 'success');
-    } catch (err) {
-      toast(`Google Drive connection failed: ${err.message}`, 'error');
-    } finally {
-      setGdriveConnecting(false);
-    }
-  };
-
-  const handleGDriveDisconnect = async () => {
-    if (!window.confirm('Disconnect from Google Drive? Your local data will not be affected.')) return;
-    await window.electron.gdrive.clearTokens();
-    setGdriveConnected(false);
-    setGdriveEmail('');
-    setGdriveClientId('');
-    setGdriveClientSecret('');
-    toast('Disconnected from Google Drive', 'warning');
-  };
-
-  const handleGDriveUpload = async () => {
-    setGdriveSyncing(true);
-    try {
-      const tokens = await window.electron.gdrive.getTokens();
-      const accessToken = await gdriveGetValidToken(tokens);
-
-      const [parties, products, invoices, invoiceItemsData, leads, transactions, expenses, purchasesData, settingsData] = await Promise.all([
-        db.parties.toArray(), db.products.toArray(), db.invoices.toArray(),
-        db.invoiceItems.toArray(), db.leads.toArray(), db.transactions.toArray(),
-        db.expenses.toArray(), db.purchases.toArray(), db.settings.toArray(),
-      ]);
-      const backupData = {
-        parties, products, invoices,
-        invoiceItems: invoiceItemsData,
-        leads, transactions, expenses,
-        purchases: purchasesData,
-        settings: settingsData,
-        exportedAt: new Date().toISOString(), version: 4,
-        appVersion: window.electron?.appVersion || '1.0.0',
-      };
-      const content = JSON.stringify(backupData, null, 2);
-      const existing = await gdriveFindBackup(accessToken);
-      const metadata = JSON.stringify({ name: 'lekhya-backup.json', mimeType: 'application/json' });
-      const boundary = 'Lekhya_boundary_XYZ';
-      const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
-
-      const url = existing
-        ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=multipart`
-        : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      const method = existing ? 'PATCH' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': `multipart/related; boundary=${boundary}`,
-        },
-        body,
-      });
-      const result = await res.json();
-      if (result.error) throw new Error(result.error.message);
-
-      const now = new Date().toISOString();
-      await setSetting('gdriveLastSync', now);
-      await setSetting('lastBackupDate', now);
-      setGdriveLastSync(now);
-      setLastBackup(now);
-      toast('Backup uploaded to Google Drive!', 'success');
-    } catch (err) {
-      toast(`Upload failed: ${err.message}`, 'error');
-    } finally {
-      setGdriveSyncing(false);
-    }
-  };
-
-  const handleGDriveImport = async () => {
-    if (!window.confirm('This will merge data from your Google Drive backup into the current app. Existing records will be updated. Continue?')) return;
-    setGdriveSyncing(true);
-    try {
-      const tokens = await window.electron.gdrive.getTokens();
-      const accessToken = await gdriveGetValidToken(tokens);
-      const file = await gdriveFindBackup(accessToken);
-      if (!file) { toast('No backup found on Google Drive. Upload one first.', 'warning'); return; }
-
-      const res = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const data = await res.json();
-      if (!data.parties && !data.invoices) throw new Error('Invalid backup file format');
-
-      await restoreFromJSON(JSON.stringify(data));
-      toast('Data imported from Google Drive successfully!', 'success');
-    } catch (err) {
-      toast(`Import failed: ${err.message}`, 'error');
-    } finally {
-      setGdriveSyncing(false);
     }
   };
 
@@ -849,14 +427,10 @@ export default function Settings() {
       <div className="card">
         {sectionTitle(<KeyRound size={20} style={{ color: 'var(--primary)' }} />, 'Change Password')}
         <form onSubmit={handleChangePassword}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Current Password *</label>
-              <input required type="password" className="form-input" value={cpCurrent} onChange={e => setCpCurrent(e.target.value)} placeholder="Current password" />
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">New Password *</label>
-              <input required type="password" className="form-input" minLength={6} value={cpNew} onChange={e => setCpNew(e.target.value)} placeholder="At least 6 characters" />
+              <input required type="password" className="form-input" minLength={8} value={cpNew} onChange={e => setCpNew(e.target.value)} placeholder="At least 8 characters" />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Confirm New Password *</label>
@@ -908,81 +482,6 @@ export default function Settings() {
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.75rem', background: 'rgba(16,185,129,0.06)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '1rem' }}>
           <strong style={{ color: 'var(--success)' }}>PWA Support:</strong> Install Lekhya One as an app on any device browser (Chrome/Edge: "Add to Home Screen" or "Install App") for a native-like experience.
         </div>
-      </div>
-
-      {/* ── Google Drive Sync ── */}
-      <div className="card">
-        {sectionTitle(<Cloud size={20} style={{ color: '#4285F4' }} />, 'Google Drive Sync')}
-
-        {!isElectron ? (
-          <div style={{ padding: '1rem', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-            <strong style={{ color: 'var(--warning)' }}>Desktop App Only:</strong> Google Drive sync is available in the Electron desktop app. Use the manual export/import below when running in a browser.
-          </div>
-        ) : gdriveConnected ? (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', padding: '0.875rem 1rem', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8 }}>
-              <CheckCircle size={20} style={{ color: 'var(--success)', flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>Connected to Google Drive</div>
-                {gdriveEmail && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{gdriveEmail}</div>}
-                {gdriveLastSync && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>Last sync: {new Date(gdriveLastSync).toLocaleString('en-IN')}</div>}
-              </div>
-              <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }} onClick={handleGDriveDisconnect}>
-                <XCircle size={14} /> Disconnect
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" onClick={handleGDriveUpload} disabled={gdriveSyncing}>
-                <CloudUpload size={16} /> {gdriveSyncing ? 'Uploading…' : 'Upload Backup to Drive'}
-              </button>
-              <button className="btn btn-secondary" onClick={handleGDriveImport} disabled={gdriveSyncing}>
-                <CloudDownload size={16} /> {gdriveSyncing ? 'Importing…' : 'Import from Drive'}
-              </button>
-            </div>
-            <div style={{ marginTop: '0.875rem', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              The backup is saved as <strong>lekhya-backup.json</strong> in your Google Drive. Use "Upload" to push your current data to Drive, and "Import" to pull it back (e.g., on another device).
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
-              Connect your Google account to sync backups directly to Google Drive. You need a <strong>Google Cloud OAuth 2.0 Client ID</strong> (free) — create one at <strong>console.cloud.google.com</strong>.
-            </p>
-            <div style={{ padding: '0.875rem', background: 'rgba(66,133,244,0.06)', border: '1px solid rgba(66,133,244,0.2)', borderRadius: 8, fontSize: '0.8rem', marginBottom: '1.25rem', lineHeight: 1.8 }}>
-              <strong style={{ color: '#4285F4' }}>Setup (one time):</strong><br />
-              1. Go to <strong>console.cloud.google.com</strong> → New Project<br />
-              2. APIs &amp; Services → Enable <strong>Google Drive API</strong><br />
-              3. Credentials → Create OAuth 2.0 Client ID → select <strong>Desktop app</strong><br />
-              4. Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> below
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Client ID</label>
-                <input
-                  type="text" className="form-input"
-                  value={gdriveClientId}
-                  onChange={e => setGdriveClientId(e.target.value)}
-                  placeholder="xxxxx.apps.googleusercontent.com"
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Client Secret</label>
-                <input
-                  type="password" className="form-input"
-                  value={gdriveClientSecret}
-                  onChange={e => setGdriveClientSecret(e.target.value)}
-                  placeholder="GOCSPX-..."
-                />
-              </div>
-            </div>
-            <button className="btn btn-primary" onClick={handleGDriveConnect} disabled={gdriveConnecting}>
-              <Cloud size={16} /> {gdriveConnecting ? 'Opening browser…' : 'Connect to Google Drive'}
-            </button>
-            <div style={{ marginTop: '0.625rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Your browser will open for Google sign-in. Return to Lekhya One after authorizing.
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Subscription & License ── */}
@@ -1082,32 +581,9 @@ export default function Settings() {
       <div className="card">
         {sectionTitle(<Shield size={20} style={{ color: 'var(--primary)' }} />, 'Data Security & Backup')}
 
-        {lastBackup && (
-          <div style={{ marginBottom: '1rem', padding: '0.625rem 1rem', background: 'rgba(16,185,129,0.08)', borderRadius: 6, border: '1px solid rgba(16,185,129,0.2)', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-            Last backup: <strong style={{ color: 'var(--success)' }}>{new Date(lastBackup).toLocaleString('en-IN')}</strong>
-          </div>
-        )}
-
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
           <button className="btn btn-primary" onClick={handleExport}>
             <Download size={16} /> Export Backup (Excel)
-          </button>
-          {isElectron && window.electron?.backup ? (
-            <button className="btn btn-secondary" onClick={handleImportElectron}>
-              <Upload size={16} /> Restore from JSON
-            </button>
-          ) : (
-            <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-              <Upload size={16} /> Restore from JSON
-              <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-            </label>
-          )}
-          <label className="btn btn-secondary" style={{ cursor: 'pointer', color: 'var(--success)' }}>
-            <FileSpreadsheet size={16} /> Import from Excel / CSV
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleXlsImportFile} style={{ display: 'none' }} />
-          </label>
-          <button className="btn btn-danger" onClick={handleClearData}>
-            <Trash2 size={16} /> Clear All Data
           </button>
         </div>
 
@@ -1129,131 +605,6 @@ export default function Settings() {
           <strong style={{ color: 'var(--warning)' }}>Recommendation:</strong> Export a backup at least once a week and store it in a cloud storage service (Google Drive, OneDrive, etc.) to prevent data loss.
         </div>
       </div>
-      {/* ── Excel / CSV Import Modal ── */}
-      {xlsImport && (
-        <Modal title="Import from Excel / CSV" onClose={() => setXlsImport(null)} size="lg">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Table selector */}
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Import into Table</label>
-              <select
-                className="form-input"
-                value={xlsImport.targetTable}
-                onChange={e => {
-                  const tbl = e.target.value;
-                  const dbCols = TABLE_SCHEMAS[tbl];
-                  const autoMap = {};
-                  xlsImport.headers.forEach(h => {
-                    const match = dbCols.find(c => c.toLowerCase() === h.toLowerCase());
-                    autoMap[h] = match || '';
-                  });
-                  setXlsImport(prev => ({ ...prev, targetTable: tbl, mapping: autoMap }));
-                }}
-              >
-                {Object.keys(TABLE_SCHEMAS).map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            {/* Field mapping */}
-            <div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Column Mapping — {xlsImport.rows.length} rows detected
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                {xlsImport.headers.map(h => (
-                  <div key={h} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ flex: 1, fontSize: '0.8rem', fontWeight: 500, padding: '0.375rem 0.625rem', background: 'var(--bg-color)', borderRadius: 4, border: '1px solid var(--border)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h}>
-                      {h}
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>→</span>
-                    <select
-                      className="form-input"
-                      style={{ flex: 1, padding: '0.375rem 0.5rem', fontSize: '0.8rem' }}
-                      value={xlsImport.mapping[h] || ''}
-                      onChange={e => setXlsImport(prev => ({ ...prev, mapping: { ...prev.mapping, [h]: e.target.value } }))}
-                    >
-                      <option value="">— skip —</option>
-                      {TABLE_SCHEMAS[xlsImport.targetTable].map(col => (
-                        <option key={col} value={col}>{col}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Preview first 3 rows */}
-            {xlsImport.rows.length > 0 && (
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Preview (first 3 rows)
-                </div>
-                <div className="table-container" style={{ maxHeight: 160, overflowY: 'auto' }}>
-                  <table>
-                    <thead>
-                      <tr>{xlsImport.headers.map(h => <th key={h} style={{ fontSize: '0.75rem' }}>{h}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {xlsImport.rows.slice(0, 3).map((row, i) => (
-                        <tr key={i}>
-                          {xlsImport.headers.map(h => (
-                            <td key={h} style={{ fontSize: '0.75rem', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {String(row[h] ?? '')}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-            <button className="btn btn-secondary" onClick={() => setXlsImport(null)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleXlsImportExecute} disabled={xlsImporting}>
-              {xlsImporting ? 'Importing…' : `Import ${xlsImport.rows.length} Rows into ${xlsImport.targetTable}`}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Clear Data Password Modal ── */}
-      {showClearModal && (
-        <Modal title="Clear All Data" onClose={() => setShowClearModal(false)}>
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            await executeClearAllData(clearPassword);
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-                ⚠️ <strong style={{ color: 'var(--danger)' }}>WARNING:</strong> This will permanently delete all invoices, contacts, products, transactions, expenses, and leads. This action cannot be undone!
-              </p>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Before deleting, the system will **automatically generate and download a full backup file** (`.json`) to your machine.
-              </p>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Enter Account Password to Confirm</label>
-                <input
-                  required
-                  type="password"
-                  className="form-input"
-                  placeholder="Your account password"
-                  value={clearPassword || ''}
-                  onChange={e => setClearPassword(e.target.value)}
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowClearModal(false)}>Cancel</button>
-              <button type="submit" className="btn btn-danger" disabled={clearing || !clearPassword}>
-                {clearing ? 'Exporting & Clearing…' : 'Backup & Clear All Data'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }
