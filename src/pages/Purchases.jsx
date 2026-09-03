@@ -423,15 +423,17 @@ export default function Purchases() {
         });
       }
       // auto-record the full payment + mark Paid (this PO flow always pays in full)
-      await createTransaction({
+      const payTxn = await createTransaction({
         date: new Date().toISOString().slice(0, 10), partyId: vendorObj.id, invoiceId: saved.id,
         type: 'Payment Out', amount: grandTotal, method: paymentMethod, reference: poNumber,
         notes: `Purchase order ${poNumber}`, autoRecorded: true,
       });
+      applied.push(['txn', payTxn.id]);
       await updateInvoice(saved.id, { status: 'Paid' });
     } catch (err) {
       for (const [kind, ref] of applied.reverse()) {
         try {
+          if (kind === 'txn') await deleteTransaction(ref);
           if (kind === 'stock') await adjustStock({ variantId: ref.variantId, productId: ref.productId, packsDelta: -ref.qty, type: 'void', reference: `ROLLBACK:${poNumber}` });
           if (kind === 'invoice') { await deleteItemsByInvoice(ref); await deleteInvoice(ref); }
         } catch { /* swallow */ }
