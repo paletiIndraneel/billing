@@ -1,6 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { listProducts, createProduct, updateProduct, deleteProduct as apiDeleteProduct } from '../api/products';
+import { listVariants, listVariantsByProduct, createVariant, updateVariant, deleteVariant as apiDeleteVariant } from '../api/variants';
+import { listParties } from '../api/parties';
+import { listActiveBatches } from '../api/batches';
+import { createPurchase, listPurchasesByVariant } from '../api/purchases';
+import { createTransaction } from '../api/transactions';
+import { listLedgerByVariant } from '../api/stockLedger';
 import { adjustStock, packageStock } from '../services/stockService';
 import { convertUnit } from '../utils/unitConversion';
 import { Plus, Edit2, Trash2, Search, TrendingDown, History, ShoppingCart, BookOpen, Package } from 'lucide-react';
@@ -49,10 +57,12 @@ function effectiveStock(v) {
 function todayISO() { return new Date().toISOString().split('T')[0]; }
 
 export default function Inventory() {
-  const products = useLiveQuery(() => db.products.toArray());
-  const variants = useLiveQuery(() => db.productVariants.toArray());
-  const vendors = useLiveQuery(() => db.parties.where('type').equals('Vendor').toArray());
-  const activeBatches = useLiveQuery(() => db.batches.where('status').equals('active').toArray(), []);
+  const products = useTable(QK.products, listProducts);
+  const variants = useTable(QK.variants, listVariants);
+  const allParties = useTable(QK.parties, listParties);
+  const vendors = useMemo(() => allParties.filter(p => p.type === 'Vendor'), [allParties]);
+  const activeBatches = useTable(QK.batches, listActiveBatches);
+  const qc = useQueryClient();
   const toast = useToast();
 
   const [search, setSearch] = useState('');
@@ -108,71 +118,63 @@ export default function Inventory() {
     const packSizeNum = Number(data.packSize) || 1;
     if (packSizeNum <= 0) { toast('Pack size must be a positive number', 'warning'); return; }
 
-    try {
-      if (mode === 'add') {
-        // Duplicate variant check
-        const allVariants = await db.productVariants.toArray();
-        const allProds = await db.products.toArray();
-        let prod = allProds.find(p => p.name.trim().toLowerCase() === data.productName.trim().toLowerCase());
-        if (prod) {
-          const dup = allVariants.find(v =>
-            v.productId === prod.id &&
-            Number(v.packSize) === packSizeNum &&
-            v.unit === data.unit
-          );
-          if (dup) {
-            toast(`A variant with pack size ${packSizeNum} ${data.unit} already exists for "${prod.name}"`, 'error');
-            return;
-          }
+    if (mode === 'add') {
+      // Duplicate variant check (against in-memory lists)
+      const prod = products.find(p => p.name.trim().toLowerCase() === data.productName.trim().toLowerCase());
+      if (prod) {
+        const dup = variants.find(v =>
+          v.productId === prod.id &&
+          Number(v.packSize) === packSizeNum &&
+          v.unit === data.unit
+        );
+        if (dup) {
+          toast(`A variant with pack size ${packSizeNum} ${data.unit} already exists for "${prod.name}"`, 'error');
+          return;
         }
+      }
 
-        const initialPacks = Number(data.stockQty) || 0;
-        const initialBaseQty = initialPacks * packSizeNum;
-        // Inherit existing product's mode; new products use the form selection
-        const effectiveMode = prod ? (prod.inventoryMode || 'packed') : (data.inventoryMode || 'packed');
-        const isBulk = effectiveMode === 'bulk';
+      const initialPacks = Number(data.stockQty) || 0;
+      // Inherit existing product's mode; new products use the form selection
+      const effectiveMode = prod ? (prod.inventoryMode || 'packed') : (data.inventoryMode || 'packed');
 
+      try {
         let productId = prod?.id ?? null;
-
-        await db.transaction('rw', db.products, db.productVariants, db.stockLedger, async () => {
-          if (prod) {
-            const updates = {};
-            if (data.hsn && !prod.hsn) updates.hsn = data.hsn;
-            if (Object.keys(updates).length) await db.products.update(prod.id, updates);
-          } else {
-            productId = await db.products.add({
-              name: data.productName.trim(),
-              hsn: data.hsn || '',
-              inventoryMode: effectiveMode,
-              masterStock: 0,
-              baseUnit: data.baseUnit?.trim().toUpperCase() || null,
-            });
-          }
-
-          const variantId = await db.productVariants.add({
-            productId: prod?.id ?? productId,
-            packSize: packSizeNum,
-            unit: data.unit,
-            purchasePrice: Number(data.purchasePrice) || 0,
-            sellingPrice,
-            gstRate: Number(data.gstRate),
-            stockQty: 0,
-            reorderPoint: Number(data.reorderPoint) || 10,
-            barcode: data.barcode?.trim() || '',
+        if (prod) {
+          if (data.hsn && !prod.hsn) await updateProduct(prod.id, { hsn: data.hsn });
+        } else {
+          const p = await createProduct({
+            name: data.productName.trim(),
+            hsn: data.hsn || '',
+            inventoryMode: effectiveMode,
+            masterStock: 0,
+            baseUnit: data.baseUnit?.trim().toUpperCase() || null,
           });
-
-          if (initialPacks > 0) {
-            await adjustStock({
-              variantId, productId: prod?.id ?? productId,
-              packsDelta: initialPacks, type: 'opening', reference: 'Opening stock',
-              unitCost: Number(data.purchasePrice) || 0,
-            });
-          }
+          productId = p.id;
+        }
+        const v = await createVariant({
+          productId,
+          packSize: packSizeNum,
+          unit: data.unit,
+          purchasePrice: Number(data.purchasePrice) || 0,
+          sellingPrice,
+          gstRate: Number(data.gstRate),
+          stockQty: 0,
+          reorderPoint: Number(data.reorderPoint) || 10,
+          barcode: data.barcode?.trim() || '',
         });
+        if (initialPacks > 0) {
+          await adjustStock({
+            variantId: v.id, productId,
+            packsDelta: initialPacks, type: 'opening', reference: 'Opening stock',
+            unitCost: Number(data.purchasePrice) || 0,
+          });
+        }
         toast('Product added', 'success');
-      } else {
-        const { variantId, productId } = editModal;
-        await db.productVariants.update(variantId, {
+      } catch (err) { toast('Save failed: ' + err.message, 'error'); }
+    } else {
+      const { variantId, productId } = editModal;
+      try {
+        await updateVariant(variantId, {
           packSize: packSizeNum,
           unit: data.unit,
           purchasePrice: Number(data.purchasePrice) || 0,
@@ -181,22 +183,27 @@ export default function Inventory() {
           reorderPoint: Number(data.reorderPoint) || 10,
           barcode: data.barcode?.trim() || '',
         });
-        if (productId) {
-          await db.products.update(productId, { name: data.productName.trim(), hsn: data.hsn || '' });
-        }
+        if (productId) await updateProduct(productId, { name: data.productName.trim(), hsn: data.hsn || '' });
         toast('Updated', 'success');
-      }
-      setEditModal(null);
-    } catch (err) { toast('Save failed: ' + err.message, 'error'); }
+      } catch (err) { toast('Save failed: ' + err.message, 'error'); }
+    }
+    qc.invalidateQueries({ queryKey: [QK.products] });
+    qc.invalidateQueries({ queryKey: [QK.variants] });
+    qc.invalidateQueries({ queryKey: [QK.stockLedger] });
+    setEditModal(null);
   };
 
   const deleteVariant = async () => {
     const { variantId, productId } = editModal;
-    await db.productVariants.delete(variantId);
-    const remaining = await db.productVariants.where('productId').equals(productId).count();
-    if (remaining === 0) await db.products.delete(productId);
+    try {
+      await apiDeleteVariant(variantId);
+      const remaining = (await listVariantsByProduct(productId)).length;
+      if (remaining === 0) await apiDeleteProduct(productId);
+      toast('Deleted', 'success');
+    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
+    qc.invalidateQueries({ queryKey: [QK.variants] });
+    qc.invalidateQueries({ queryKey: [QK.products] });
     setEditModal(null);
-    toast('Deleted', 'success');
   };
 
   const handlePurchase = async (e) => {
@@ -206,30 +213,28 @@ export default function Inventory() {
     if (packsNum <= 0) { toast('Qty must be greater than 0', 'warning'); return; }
     const packSz = ps(variant);
     const baseQtyIn = packsNum * packSz;
+    const priceNum = Number(purchasePrice) || 0;
 
     try {
-      await db.transaction('rw', db.purchases, db.productVariants, db.products, db.stockLedger, async () => {
-        await db.purchases.add({
-          productId: variant.productId,
-          variantId: variant.id,
-          vendorId: vendorId ? Number(vendorId) : null,
-          date: new Date(date).toISOString(),
-          qty: packsNum,
-          purchasePrice: Number(purchasePrice) || 0,
-          notes: notes || '',
-        });
-        await adjustStock({
-          variantId: variant.id, productId: variant.productId,
-          packsDelta: packsNum, type: 'stock-in',
-          reference: 'Manual stock-in', note: notes || '',
-          unitCost: Number(purchasePrice) || 0,
-        });
+      await createPurchase({
+        productId: variant.productId,
+        variantId: variant.id,
+        vendorId: vendorId || null,
+        date: new Date(date).toISOString(),
+        qty: packsNum,
+        purchasePrice: priceNum,
+        notes: notes || '',
       });
-      const priceNum = Number(purchasePrice) || 0;
+      await adjustStock({
+        variantId: variant.id, productId: variant.productId,
+        packsDelta: packsNum, type: 'stock-in',
+        reference: 'Manual stock-in', note: notes || '',
+        unitCost: priceNum,
+      });
       if (priceNum > 0) {
-        await db.transactions.add({
+        await createTransaction({
           date: new Date(date).toISOString().slice(0, 10),
-          partyId: vendorId ? Number(vendorId) : null,
+          partyId: vendorId || null,
           type: 'Payment Out',
           amount: priceNum * packsNum,
           method: 'Cash',
@@ -238,9 +243,14 @@ export default function Inventory() {
           autoRecorded: true,
         });
       }
-      setPurchaseModal(null);
       toast(`Added ${packsNum} packs (${baseQtyIn} ${variant.unit}) of "${variant.productName}"`, 'success');
     } catch (err) { toast('Purchase failed: ' + err.message, 'error'); }
+    qc.invalidateQueries({ queryKey: [QK.purchases] });
+    qc.invalidateQueries({ queryKey: [QK.variants] });
+    qc.invalidateQueries({ queryKey: [QK.products] });
+    qc.invalidateQueries({ queryKey: [QK.stockLedger] });
+    qc.invalidateQueries({ queryKey: [QK.transactions] });
+    setPurchaseModal(null);
   };
 
   const handleOut = async (e) => {
@@ -249,15 +259,16 @@ export default function Inventory() {
     const packSz = ps(variant);
     const baseQtyOut = Number(qty) * packSz;
     try {
-      await db.transaction('rw', db.productVariants, db.products, db.stockLedger, async () => {
-        await adjustStock({
-          variantId: variant.id, productId: variant.productId,
-          packsDelta: -Number(qty), type: 'stock-out', reference: 'Manual stock-out',
-        });
+      await adjustStock({
+        variantId: variant.id, productId: variant.productId,
+        packsDelta: -Number(qty), type: 'stock-out', reference: 'Manual stock-out',
       });
-      setOutModal(null);
       toast(`Removed ${qty} packs (${baseQtyOut} ${variant.unit})`, 'success');
     } catch (err) { toast(err.message, 'error'); }
+    qc.invalidateQueries({ queryKey: [QK.variants] });
+    qc.invalidateQueries({ queryKey: [QK.products] });
+    qc.invalidateQueries({ queryKey: [QK.stockLedger] });
+    setOutModal(null);
   };
 
   const handlePackaging = async (e) => {
@@ -268,10 +279,7 @@ export default function Inventory() {
       .map(i => ({ variantId: i.variant.id, qty: Number(i.qtyStr) }));
     if (packItems.length === 0) { toast('Enter at least one packaging quantity', 'warning'); return; }
     try {
-      await db.transaction('rw', db.products, db.productVariants, db.stockLedger, async () => {
-        await packageStock({ productId: product.id, packagingItems: packItems, note: note || '' });
-      });
-      setPackagingModal(null);
+      await packageStock({ productId: product.id, packagingItems: packItems, note: note || '' });
       const totalPacked = packItems.reduce((s, i) => {
         const v = packagingModal.items.find(x => x.variant.id === i.variantId);
         const packSz = Number(v?.variant?.packSize) || 1;
@@ -281,22 +289,22 @@ export default function Inventory() {
     } catch (err) {
       toast(err.message, 'error');
     }
+    qc.invalidateQueries({ queryKey: [QK.products] });
+    qc.invalidateQueries({ queryKey: [QK.variants] });
+    qc.invalidateQueries({ queryKey: [QK.stockLedger] });
+    setPackagingModal(null);
   };
 
   const historyVariant = variantsWithProduct.find(v => v.id === historyVariantId);
-  const purchaseHistory = useLiveQuery(
-    () => historyVariantId
-      ? db.purchases.where('variantId').equals(historyVariantId).reverse().toArray()
-      : Promise.resolve([]),
-    [historyVariantId]
+  const purchaseHistory = useTable(
+    [QK.purchases, historyVariantId],
+    () => historyVariantId ? listPurchasesByVariant(historyVariantId) : Promise.resolve([]),
   );
 
   const ledgerVariant = variantsWithProduct.find(v => v.id === ledgerVariantId);
-  const ledgerEntries = useLiveQuery(
-    () => ledgerVariantId
-      ? db.stockLedger.where('variantId').equals(ledgerVariantId).reverse().toArray()
-      : Promise.resolve([]),
-    [ledgerVariantId]
+  const ledgerEntries = useTable(
+    [QK.stockLedger, ledgerVariantId],
+    () => ledgerVariantId ? listLedgerByVariant(ledgerVariantId) : Promise.resolve([]),
   );
 
   return (
