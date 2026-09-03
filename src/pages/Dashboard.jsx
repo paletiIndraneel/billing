@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { listInvoices } from '../api/invoices';
+import { listProducts } from '../api/products';
+import { listVariants } from '../api/variants';
+import { listParties } from '../api/parties';
+import { listExpenses } from '../api/expenses';
 import { IndianRupee, FileText, Package, AlertTriangle, TrendingUp, TrendingDown, Bell, Clock, ShoppingCart } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
@@ -95,11 +100,11 @@ const DATE_RANGES = [
 ];
 
 export default function Dashboard() {
-  const invoices        = useLiveQuery(() => db.invoices.orderBy('id').reverse().toArray());
-  const products        = useLiveQuery(() => db.products.toArray());
-  const productVariants = useLiveQuery(() => db.productVariants.toArray());
-  const parties         = useLiveQuery(() => db.parties.toArray());
-  const expenses        = useLiveQuery(() => db.expenses.toArray());
+  const invoices        = useTable(QK.invoices, listInvoices);   // listInvoices orders date desc
+  const products        = useTable(QK.products, listProducts);
+  const productVariants = useTable(QK.variants, listVariants);
+  const parties         = useTable(QK.parties, listParties);
+  const expenses        = useTable(QK.expenses, listExpenses);
   const toast           = useToast();
 
   const [dateRange, setDateRange] = useState('month');
@@ -216,14 +221,14 @@ export default function Dashboard() {
   const topDebtors = useMemo(() => {
     const map = {};
     pendingSales.forEach(inv => { map[inv.partyId] = (map[inv.partyId] || 0) + (inv.total || 0); });
-    return Object.entries(map).map(([id, amount]) => ({ partyId: Number(id), amount }))
+    return Object.entries(map).map(([id, amount]) => ({ partyId: id, amount }))
       .sort((a, b) => b.amount - a.amount).slice(0, 5);
   }, [pendingSales]);
 
   const topCreditors = useMemo(() => {
     const map = {};
     pendingPurchases.forEach(inv => { map[inv.partyId] = (map[inv.partyId] || 0) + (inv.total || 0); });
-    return Object.entries(map).map(([id, amount]) => ({ partyId: Number(id), amount }))
+    return Object.entries(map).map(([id, amount]) => ({ partyId: id, amount }))
       .sort((a, b) => b.amount - a.amount).slice(0, 5);
   }, [pendingPurchases]);
 
