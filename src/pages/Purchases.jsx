@@ -1,6 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, getSetting, getNextInvoiceNumber } from '../db/db';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTable } from '../api/useTable';
+import { QK } from '../api/realtime';
+import { getCompany, nextInvoiceNumber } from '../api/company';
+import { listParties, createParty } from '../api/parties';
+import { listProducts, createProduct } from '../api/products';
+import { listVariants, createVariant } from '../api/variants';
+import { listInvoices, createInvoice, updateInvoice, deleteInvoice } from '../api/invoices';
+import { createInvoiceItem, listItemsByInvoice, deleteItemsByInvoice } from '../api/invoiceItems';
+import { createTransaction, deleteTransaction, listTransactionsByInvoice } from '../api/transactions';
+import { listBatchesByVariant, createBatch, updateBatch as apiUpdateBatch } from '../api/batches';
+import { createPurchase } from '../api/purchases';
 import { adjustStock } from '../services/stockService';
 import { Plus, Trash2, Eye, Download, Package, TrendingDown, BarChart2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -138,12 +148,13 @@ const STATUS_OPTIONS = ['Pending', 'Received', 'Cancelled'];
 const PAGE_SIZE = 50;
 
 export default function Purchases() {
-  const vendors = useLiveQuery(() => db.parties.where('type').equals('Vendor').toArray());
-  const products = useLiveQuery(() => db.products.toArray());
-  const productVariants = useLiveQuery(() => db.productVariants.toArray());
-  const purchaseBills = useLiveQuery(() =>
-    db.invoices.where('type').equals('Purchase').reverse().sortBy('id')
-  );
+  const parties = useTable(QK.parties, listParties);
+  const vendors = useMemo(() => parties.filter(p => p.type === 'Vendor'), [parties]);
+  const products = useTable(QK.products, listProducts);
+  const productVariants = useTable(QK.variants, listVariants);
+  const allInvoices = useTable(QK.invoices, listInvoices);
+  const purchaseBills = useMemo(() => allInvoices.filter(i => i.type === 'Purchase'), [allInvoices]);
+  const qc = useQueryClient();
 
   const [tab, setTab] = useState('new');
   const [selectedVendor, setSelectedVendor] = useState('');
@@ -188,13 +199,14 @@ export default function Purchases() {
   const toast = useToast();
 
   useEffect(() => {
-    getSetting('company', {}).then(c => setCompanyGstin(c?.gstin || ''));
+    getCompany().then(c => setCompanyGstin(c?.gstin || ''));
   }, []);
 
   const saveVendor = async (e) => {
     e.preventDefault();
     try {
-      await db.parties.add({ ...vendorModal, type: 'Vendor', activities: [] });
+      await createParty({ ...vendorModal, type: 'Vendor', activities: [] });
+      qc.invalidateQueries({ queryKey: [QK.parties] });
       toast(`Vendor "${vendorModal.name}" added`, 'success');
       setVendorModal(null);
     } catch (err) {
@@ -209,21 +221,18 @@ export default function Purchases() {
     if (sellingPrice <= 0) { toast('Selling price must be > 0', 'warning'); return; }
     if (!productModal.productName.trim()) { toast('Product name is required', 'warning'); return; }
     try {
-      const allProds = await db.products.toArray();
-      let prod = allProds.find(p => p.name.trim().toLowerCase() === productModal.productName.trim().toLowerCase());
-      let productId;
-      if (prod) {
-        productId = prod.id;
-      } else {
-        productId = await db.products.add({
-          name: productModal.productName.trim(),
-          hsn: productModal.hsn || '',
-          inventoryMode: 'packed',
-          masterStock: 0,
-          baseUnit: null,
-        });
-      }
-      const variantId = await db.productVariants.add({
+      const allProds = await listProducts();
+      const existing = allProds.find(p => p.name.trim().toLowerCase() === productModal.productName.trim().toLowerCase());
+      const productId = existing
+        ? existing.id
+        : (await createProduct({
+            name: productModal.productName.trim(),
+            hsn: productModal.hsn || '',
+            inventoryMode: 'packed',
+            masterStock: 0,
+            baseUnit: null,
+          })).id;
+      const variant = await createVariant({
         productId,
         packSize: packSizeNum,
         unit: productModal.unit,
@@ -237,11 +246,12 @@ export default function Purchases() {
       const initialPacks = Number(productModal.initialStock) || 0;
       if (initialPacks > 0) {
         await adjustStock({
-          variantId, productId,
+          variantId: variant.id, productId,
           packsDelta: initialPacks, type: 'opening', reference: 'Opening stock',
           unitCost: Number(productModal.purchasePrice) || 0,
         });
       }
+      for (const k of [QK.products, QK.variants, QK.stockLedger]) qc.invalidateQueries({ queryKey: [k] });
       toast(`Product "${productModal.productName}" added`, 'success');
       setProductModal(null);
     } catch (err) {
@@ -251,7 +261,7 @@ export default function Purchases() {
 
   const addItem = () => {
     if (!selectedProduct) return;
-    const v = variantsForPurchase.find(x => x.variantId.toString() === selectedProduct);
+    const v = variantsForPurchase.find(x => x.variantId === selectedProduct);
     if (!v) return;
     const qty = Math.max(1, parseInt(quantityStr) || 1);
     const existing = items.findIndex(i => i.variantId === v.variantId);
@@ -331,7 +341,7 @@ export default function Purchases() {
 
   const grandTotal = totals.subtotal;
 
-  const vendorObj = vendors?.find(v => v.id.toString() === selectedVendor);
+  const vendorObj = vendors.find(v => v.id === selectedVendor);
   const isInterState = !!(getStateCode(vendorObj?.gstin) && getStateCode(companyGstin) && getStateCode(vendorObj?.gstin) !== getStateCode(companyGstin));
 
   const handleSave = async () => {
@@ -341,114 +351,126 @@ export default function Purchases() {
       if (!item.qty || item.qty < 1) { toast(`Qty for "${item.name}" must be at least 1`, 'warning'); return; }
     }
     setSaving(true);
+
+    const lineItems = items.map(item => ({
+      variantId: item.variantId, productId: item.productId,
+      name: item.name, hsn: item.hsn,
+      purchasePriceSnapshot: item.purchasePrice || 0,
+      barcodeSnapshot: item.barcode || '',
+      purchasePrice: item.purchasePrice, rate: item.rate, gstRate: item.gstRate,
+      qty: item.qty, unit: item.unit, itemDiscountPct: item.itemDiscountPct || 0,
+      batchNo: item.batchNo || null,
+      mfgDate: item.mfgDate || null,
+      expiryDate: item.expiryDate || null,
+    }));
+
+    const company = await getCompany() ?? {};
+    const freshCompanyState = getStateCode(company?.gstin || '');
+    const freshVendorState = getStateCode(vendorObj.gstin);
+    const finalTaxType = (freshCompanyState && freshVendorState && freshCompanyState !== freshVendorState)
+      ? 'IGST' : 'CGST_SGST';
+
+    let poNumber;
     try {
-      const company = await getSetting('company', {});
-      const poNumber = await getNextInvoiceNumber();
-
-      const lineItems = items.map(item => ({
-        variantId: item.variantId, productId: item.productId,
-        name: item.name, hsn: item.hsn,
-        purchasePriceSnapshot: item.purchasePrice || 0,
-        barcodeSnapshot: item.barcode || '',
-        purchasePrice: item.purchasePrice, rate: item.rate, gstRate: item.gstRate,
-        qty: item.qty, unit: item.unit, itemDiscountPct: item.itemDiscountPct || 0,
-        batchNo: item.batchNo || null,
-        mfgDate: item.mfgDate || null,
-        expiryDate: item.expiryDate || null,
-      }));
-
-      const freshCompanyState = getStateCode(company?.gstin || '');
-      const freshVendorState = getStateCode(vendorObj.gstin);
-      const finalTaxType = (freshCompanyState && freshVendorState && freshCompanyState !== freshVendorState)
-        ? 'IGST' : 'CGST_SGST';
-
-      const record = {
-        invoiceNumber: poNumber, type: 'Purchase',
-        partyId: vendorObj.id, date: new Date().toISOString(),
-        taxType: finalTaxType,
-        grossSubtotal: totals.gross,
-        subtotal: totals.subtotal,
-        taxAmount: 0,
-        total: grandTotal,
-        status: 'Pending', notes: notes.trim() || null, lineItems,
-      };
-
-      await db.transaction('rw', db.invoices, db.productVariants, db.products, db.stockLedger, db.batches, async () => {
-        await db.invoices.add(record);
-        for (const item of items) {
-          await adjustStock({
-            variantId: item.variantId,
-            productId: item.productId,
-            packsDelta: item.qty,
-            type: 'purchase',
-            reference: poNumber,
-            unitCost: item.rate ?? 0,
-            batchNo: item.batchNo || null,
-          });
-          if (item.batchNo) {
-            const existingBatch = await db.batches
-              .where('batchNo').equals(item.batchNo)
-              .filter(b => b.variantId === item.variantId)
-              .first();
-            if (existingBatch) {
-              await db.batches.update(existingBatch.id, {
-                totalQty: (existingBatch.totalQty || 0) + item.qty,
-                remainingQty: (existingBatch.remainingQty || 0) + item.qty,
-              });
-            } else {
-              await db.batches.add({
-                variantId: item.variantId,
-                productId: item.productId,
-                batchNo: item.batchNo,
-                mfgDate: item.mfgDate || null,
-                expiryDate: item.expiryDate || null,
-                purchaseDate: new Date().toISOString(),
-                costPerPack: item.rate ?? 0,
-                totalQty: item.qty,
-                remainingQty: item.qty,
-                purchaseRef: poNumber,
-                status: 'active',
-              });
-            }
-          }
-        }
-      });
-
-      const saved = await db.invoices.where('invoiceNumber').equals(poNumber).first();
-
-      // Auto-record payment transaction and mark invoice as Paid
-      if (saved) {
-        await db.transactions.add({
-          date: new Date().toISOString().slice(0, 10),
-          partyId: vendorObj.id,
-          invoiceId: saved.id,
-          type: 'Payment Out',
-          amount: grandTotal,
-          method: paymentMethod,
-          reference: poNumber,
-          notes: `Purchase order ${poNumber}`,
-          autoRecorded: true,
-        });
-        await db.invoices.update(saved.id, { status: 'Paid' });
-      }
-
-      const doc = await buildPurchasePDF(saved || record, vendorObj, lineItems, company);
-      doc.save(`${poNumber}.pdf`);
-
-      setItems([]); setSelectedVendor(''); setNotes(''); setPaymentMethod('Bank Transfer');
-      toast(`Purchase ${poNumber} saved! Stock updated.`, 'success');
+      poNumber = await nextInvoiceNumber();
     } catch (err) {
       toast('Save failed: ' + err.message, 'error');
-    } finally {
       setSaving(false);
+      return;
+    }
+
+    const record = {
+      invoiceNumber: poNumber, type: 'Purchase',
+      partyId: vendorObj.id, date: new Date().toISOString(),
+      taxType: finalTaxType,
+      grossSubtotal: totals.gross,
+      subtotal: totals.subtotal,
+      taxAmount: 0,
+      total: grandTotal,
+      status: 'Pending', notes: notes.trim() || null,
+    };
+
+    const applied = [];   // for rollback
+    let saved;
+    try {
+      saved = await createInvoice(record); applied.push(['invoice', saved.id]);
+      for (const li of lineItems) await createInvoiceItem({ ...li, invoiceId: saved.id });
+      for (const item of items) {
+        await adjustStock({
+          variantId: item.variantId, productId: item.productId, packsDelta: item.qty,
+          type: 'purchase', reference: poNumber, unitCost: item.rate ?? 0, batchNo: item.batchNo || null,
+        });
+        applied.push(['stock', item]);
+        if (item.batchNo) {
+          const existing = (await listBatchesByVariant(item.variantId)).find(b => b.batchNo === item.batchNo && b.status === 'active');
+          if (existing) {
+            await apiUpdateBatch(existing.id, {
+              receivedQty: (existing.receivedQty || 0) + item.qty,
+              remainingQty: (existing.remainingQty || 0) + item.qty,
+            });
+          } else {
+            await createBatch({
+              variantId: item.variantId, productId: item.productId, batchNo: item.batchNo,
+              mfgDate: item.mfgDate || null, expiryDate: item.expiryDate || null, status: 'active',
+              receivedQty: item.qty, remainingQty: item.qty,
+            });
+          }
+        }
+        await createPurchase({
+          productId: item.productId, variantId: item.variantId, vendorId: vendorObj.id,
+          date: new Date().toISOString(), qty: item.qty,
+          purchasePrice: item.rate ?? item.purchasePrice ?? 0, notes: notes.trim() || null,
+        });
+      }
+      // auto-record the full payment + mark Paid (this PO flow always pays in full)
+      await createTransaction({
+        date: new Date().toISOString().slice(0, 10), partyId: vendorObj.id, invoiceId: saved.id,
+        type: 'Payment Out', amount: grandTotal, method: paymentMethod, reference: poNumber,
+        notes: `Purchase order ${poNumber}`, autoRecorded: true,
+      });
+      await updateInvoice(saved.id, { status: 'Paid' });
+    } catch (err) {
+      for (const [kind, ref] of applied.reverse()) {
+        try {
+          if (kind === 'stock') await adjustStock({ variantId: ref.variantId, productId: ref.productId, packsDelta: -ref.qty, type: 'void', reference: `ROLLBACK:${poNumber}` });
+          if (kind === 'invoice') { await deleteItemsByInvoice(ref); await deleteInvoice(ref); }
+        } catch { /* swallow */ }
+      }
+      toast('Purchase save failed and was rolled back: ' + err.message, 'error');
+      setSaving(false);
+      return;
+    }
+
+    // success — invalidate every touched cache, then PDF + reset
+    for (const k of [QK.invoices, QK.invoiceItems, QK.variants, QK.products, QK.batches, QK.purchases, QK.transactions]) qc.invalidateQueries({ queryKey: [k] });
+
+    try {
+      const doc = await buildPurchasePDF(saved, vendorObj, lineItems, company);
+      doc.save(`${poNumber}.pdf`);
+    } catch (pdfErr) {
+      console.warn('[Purchase] PDF generation failed:', pdfErr.message);
+    }
+
+    setItems([]); setSelectedVendor(''); setNotes(''); setPaymentMethod('Bank Transfer');
+    toast(`Purchase ${poNumber} saved! Stock updated.`, 'success');
+    setSaving(false);
+  };
+
+  const openViewBill = async (bill) => {
+    try {
+      const lineItems = await listItemsByInvoice(bill.id);
+      setViewBill({ ...bill, lineItems });
+    } catch (err) {
+      toast('Failed to load bill: ' + err.message, 'error');
     }
   };
 
   const handleReprintPDF = async (bill) => {
-    const vendor = vendors?.find(v => v.id === bill.partyId);
-    if (!vendor || !bill.lineItems?.length) { toast('Cannot reprint: data missing', 'warning'); return; }
-    const company = await getSetting('company', {});
-    const doc = await buildPurchasePDF(bill, vendor, bill.lineItems, company);
+    const vendor = vendors.find(v => v.id === bill.partyId);
+    const lineItems = await listItemsByInvoice(bill.id);
+    if (!vendor || !lineItems.length) { toast('Cannot reprint: data missing', 'warning'); return; }
+    const company = await getCompany() ?? {};
+    const doc = await buildPurchasePDF(bill, vendor, lineItems, company);
     doc.save(`${bill.invoiceNumber || `PO-${bill.id}`}.pdf`);
     toast('PDF downloaded', 'success');
   };
@@ -458,29 +480,30 @@ export default function Purchases() {
   const handleStatusChange = async (bill, newStatus) => {
     try {
       if (newStatus === 'Paid') {
-        const relatedTxns = await db.transactions.where('invoiceId').equals(bill.id).toArray();
+        const relatedTxns = await listTransactionsByInvoice(bill.id);
         const alreadyPaid = relatedTxns.reduce((s, t) => s + (t.amount || 0), 0);
         const remaining = (bill.total || 0) - alreadyPaid;
         if (remaining > 0.01) {
-          await db.transaction('rw', db.transactions, db.invoices, async () => {
-            await db.transactions.add({
-              date: new Date().toISOString().slice(0, 10),
-              partyId: bill.partyId,
-              invoiceId: bill.id,
-              type: 'Payment Out',
-              amount: remaining,
-              method: 'Other',
-              reference: bill.invoiceNumber || `PO-${bill.id}`,
-              notes: 'Balance settled — marked Paid from Purchase History',
-              autoRecorded: true,
-            });
-            await db.invoices.update(bill.id, { status: newStatus });
+          await createTransaction({
+            date: new Date().toISOString().slice(0, 10),
+            partyId: bill.partyId,
+            invoiceId: bill.id,
+            type: 'Payment Out',
+            amount: remaining,
+            method: 'Other',
+            reference: bill.invoiceNumber || `PO-${bill.id}`,
+            notes: 'Balance settled — marked Paid from Purchase History',
+            autoRecorded: true,
           });
+          await updateInvoice(bill.id, { status: newStatus });
+          qc.invalidateQueries({ queryKey: [QK.transactions] });
+          qc.invalidateQueries({ queryKey: [QK.invoices] });
           toast(`Status updated to Paid — ₹${remaining.toLocaleString('en-IN')} recorded as payment`, 'success');
           return;
         }
       }
-      await db.invoices.update(bill.id, { status: newStatus });
+      await updateInvoice(bill.id, { status: newStatus });
+      qc.invalidateQueries({ queryKey: [QK.invoices] });
       toast(`Status updated to ${newStatus}`, 'success');
     } catch (err) {
       toast('Failed to update status: ' + err.message, 'error');
@@ -489,31 +512,27 @@ export default function Purchases() {
 
   const handleDelete = async (bill) => {
     try {
-      const linkedTxn = await db.transactions.filter(t => t.invoiceId === bill.id && t.autoRecorded).first();
-      if (bill.lineItems?.length) {
-        await db.transaction('rw', db.invoices, db.productVariants, db.products, db.stockLedger, db.transactions, async () => {
-          if (linkedTxn) await db.transactions.delete(linkedTxn.id);
-          for (const item of bill.lineItems) {
-            if (!item.variantId) continue;
-            try {
-              await adjustStock({
-                variantId: item.variantId,
-                productId: item.productId,
-                packsDelta: -item.qty,
-                type: 'void',
-                reference: `VOID:${bill.invoiceNumber || bill.id}`,
-                note: 'Purchase bill deleted',
-              });
-            } catch (stockErr) {
-              console.warn(`[Delete] Stock reversal skipped for variant ${item.variantId}:`, stockErr.message);
-            }
-          }
-          await db.invoices.delete(bill.id);
-        });
-      } else {
-        if (linkedTxn) await db.transactions.delete(linkedTxn.id);
-        await db.invoices.delete(bill.id);
+      const items = await listItemsByInvoice(bill.id);
+      const linked = (await listTransactionsByInvoice(bill.id)).filter(t => t.autoRecorded);
+      for (const txn of linked) await deleteTransaction(txn.id);
+      for (const item of items) {
+        if (!item.variantId) continue;
+        try {
+          await adjustStock({
+            variantId: item.variantId,
+            productId: item.productId,
+            packsDelta: -item.qty,
+            type: 'void',
+            reference: `VOID:${bill.invoiceNumber || bill.id}`,
+            note: 'Purchase bill deleted',
+          });
+        } catch (stockErr) {
+          console.warn(`[Delete] Stock reversal skipped for variant ${item.variantId}:`, stockErr.message);
+        }
       }
+      await deleteItemsByInvoice(bill.id);
+      await deleteInvoice(bill.id);
+      for (const k of [QK.invoices, QK.invoiceItems, QK.variants, QK.products, QK.transactions]) qc.invalidateQueries({ queryKey: [k] });
       setConfirmDeleteId(null);
       toast('Purchase bill deleted', 'success');
     } catch (err) {
@@ -821,7 +840,7 @@ export default function Purchases() {
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }} onClick={() => setViewBill(bill)} title="View"><Eye size={14} /></button>
+                              <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }} onClick={() => openViewBill(bill)} title="View"><Eye size={14} /></button>
                               <button className="btn btn-secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleReprintPDF(bill)} title="PDF"><Download size={14} /></button>
                               {confirmDeleteId === bill.id ? (
                                 <>
