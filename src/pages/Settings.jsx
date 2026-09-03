@@ -57,7 +57,9 @@ export default function Settings() {
   useEffect(() => {
     (async () => {
       const [co, subscription] = await Promise.all([getCompany(), getSubscription()]);
-      setCompany(co ? { ...co, logo: co.logoUrl || '', bankIFSC: co.bankIfsc || '' } : defaultCompany);
+      const merged = co ? { ...defaultCompany, ...co, logo: co.logoUrl ?? '', bankIFSC: co.bankIfsc ?? '' } : { ...defaultCompany };
+      Object.keys(merged).forEach(k => { if (merged[k] == null) merged[k] = ''; });
+      setCompany(merged);
       setInvoiceTheme(localStorage.getItem('lekhya_theme_invoice') || 'classic');
       setInvoicePrefix(co?.invoicePrefix || 'INV');
       setDefaultTerms(co?.defaultTerms || '');
