@@ -853,8 +853,9 @@ export default function Billing() {
             : await createInvoice({ ...invoiceRecord, invoiceNumber });
           break;
         } catch (e) {
-          // 23505 = unique violation on invoice_number (another tab grabbed the same seq)
-          if (String(e.message).includes('23505') && attempt < 2) continue;
+          // 23505 = unique violation on invoice_number (another tab grabbed the same seq).
+          // PostgREST surfaces it as e.code sometimes, as message text other times.
+          if (!draftId && (e?.code === '23505' || String(e?.message).includes('23505') || String(e?.message).includes('duplicate key')) && attempt < 2) continue;
           throw e;
         }
       }
@@ -927,6 +928,11 @@ export default function Billing() {
             if (kind === 'stock') await adjustStock({ variantId: ref.id, productId: ref.productId, packsDelta: -ref.sign * ref.qty, type: 'void', reference: `ROLLBACK:${invoiceNumber}` });
             if (kind === 'invoice') { await deleteItemsByInvoice(ref); await deleteInvoice(ref); }
           } catch { /* swallow — nothing better to do */ }
+        }
+        // A finalising draft was already flipped out of 'Draft' (and its items wiped) before
+        // the try. Put it back in the Drafts tab; the old line items are not recoverable.
+        if (draftId) {
+          try { await updateInvoice(draftId, { status: 'Draft' }); } catch { /* swallow */ }
         }
         toast('Invoice save failed and was rolled back: ' + err.message, 'error');
         return;
