@@ -1,5 +1,5 @@
 import { LogIn, Building2 } from 'lucide-react';
-import logoUrl from '../assets/logo.png';
+import logoUrl from '../assets/Nexaura logo.png';
 
 export default function Landing({ onSignIn, onSignUp }) {
   return (

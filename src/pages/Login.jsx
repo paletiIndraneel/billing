@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { LogIn, KeyRound, ArrowLeft, HelpCircle, CheckCircle } from 'lucide-react';
-import logoUrl from '../assets/logo.png';
+import logoUrl from '../assets/Nexaura logo.png';
 import { useToast } from '../components/Toast';
 
 // ── Password Reset screen (shown after user clicks email link) ─────────────────

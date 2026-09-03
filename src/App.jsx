@@ -1,7 +1,7 @@
 import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, RefreshCw, Sun, Moon } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
-import logo from './assets/logo.png';
+import logo from './assets/Nexaura logo.png';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ToastProvider, useToast } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';

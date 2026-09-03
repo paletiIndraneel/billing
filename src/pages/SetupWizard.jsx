@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { ArrowRight, ArrowLeft, Check, Cloud } from 'lucide-react';
-import logoUrl from '../assets/logo.png';
+import logoUrl from '../assets/Nexaura logo.png';
 import { useToast } from '../components/Toast';
 
 const STEPS = ['Business Info', 'Admin Account'];
