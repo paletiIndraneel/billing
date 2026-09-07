@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast';
 
 const STEPS = ['Business Info', 'Admin Account'];
 
-export default function SetupWizard({ onComplete }) {
+export default function SetupWizard({ onComplete, onBack }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -206,6 +206,15 @@ export default function SetupWizard({ onComplete }) {
               </button>
             </div>
           </form>
+        )}
+
+        {onBack && (
+          <p style={{ textAlign: 'center', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+            <button type="button" onClick={onBack}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+              <ArrowLeft size={14} /> Back to sign in
+            </button>
+          </p>
         )}
       </div>
     </div>

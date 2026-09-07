@@ -1,5 +1,5 @@
 import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon, Menu } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
 import logo from './assets/Nexaura logo.png';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -68,10 +68,12 @@ function useTheme() {
 
 function AppLayout({ user, onLogout }) {
   const [theme, toggleTheme] = useTheme();
+  const [navOpen, setNavOpen] = useState(false);
 
   return (
     <div className="app-container">
-      <aside className="sidebar">
+      {navOpen && <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} />}
+      <aside className={`sidebar${navOpen ? ' sidebar--open' : ''}`}>
         <div className="sidebar-header">
           <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }} />
           NEXAURA
@@ -79,6 +81,7 @@ function AppLayout({ user, onLogout }) {
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
             <NavLink key={to} to={to} end={end}
+              onClick={() => setNavOpen(false)}
               className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
               <Icon size={19} />
               {label}
@@ -89,7 +92,17 @@ function AppLayout({ user, onLogout }) {
 
       <main className="main-content">
         <header className="topbar">
-          <div style={{ fontWeight: 600, fontSize: '0.95rem' }}><PageTitle /></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+            <button
+              className="topbar-menu-btn btn btn-secondary"
+              style={{ padding: '0.375rem 0.5rem' }}
+              onClick={() => setNavOpen(true)}
+              aria-label="Open navigation menu"
+            >
+              <Menu size={18} />
+            </button>
+            <div style={{ fontWeight: 600, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><PageTitle /></div>
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <button
               className="btn btn-secondary"
@@ -102,7 +115,7 @@ function AppLayout({ user, onLogout }) {
             <div style={{ width: 34, height: 34, borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>
               {user?.username?.[0]?.toUpperCase() || 'A'}
             </div>
-            <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{user?.username || 'Admin'}</span>
+            <span className="topbar-username" style={{ fontWeight: 500, fontSize: '0.875rem' }}>{user?.username || 'Admin'}</span>
             <button className="btn btn-secondary" style={{ padding: '0.375rem 0.625rem', fontSize: '0.8rem' }} onClick={onLogout} title="Sign out">
               <LogOut size={14} />
             </button>
@@ -210,7 +223,7 @@ function AuthGate() {
     );
   }
 
-  if (authState === 'setup') return <SetupWizard onComplete={() => setAuthState('login')} />;
+  if (authState === 'setup') return <SetupWizard onComplete={() => setAuthState('login')} onBack={() => setAuthState('landing')} />;
 
   if (authState === 'reset-password') {
     return <PasswordReset onDone={() => { setUser(null); setAuthState('login'); }} />;
