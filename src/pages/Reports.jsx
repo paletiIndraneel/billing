@@ -83,8 +83,6 @@ const TABS = [
   { id: 'inventory', label: 'Inventory', icon: Package },
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
-
 export default function Reports() {
   const invoicesRaw = useTable(QK.invoices, listInvoices);
   const invoiceItems = useTable(QK.invoiceItems, listInvoiceItems);
