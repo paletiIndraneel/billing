@@ -1,13 +1,12 @@
 import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, RefreshCw, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
 import logo from './assets/Nexaura logo.png';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ToastProvider, useToast } from './components/Toast';
+import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
-import { startAutoSync, stopAutoSync, sync } from './lib/syncEngine';
 import { startRealtime, stopRealtime } from './api/realtime';
 import SubscriptionGate from './components/SubscriptionGate';
 import { PasswordReset } from './pages/Login';
@@ -30,18 +29,6 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 function clearSession() {
   localStorage.removeItem('lekhya_company_id');
   localStorage.removeItem('lekhya_subscription');
-}
-
-function useOnlineStatus() {
-  const [online, setOnline] = useState(navigator.onLine);
-  useEffect(() => {
-    const up = () => setOnline(true);
-    const down = () => setOnline(false);
-    window.addEventListener('online', up);
-    window.addEventListener('offline', down);
-    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
-  }, []);
-  return online;
 }
 
 const NAV_ITEMS = [
@@ -80,22 +67,6 @@ function useTheme() {
 
 function AppLayout({ user, onLogout }) {
   const [theme, toggleTheme] = useTheme();
-  const [syncing, setSyncing] = useState(false);
-  const online = useOnlineStatus();
-  const toast = useToast();
-
-  const handleSync = async () => {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      await sync();
-      toast('Data synced', 'success');
-    } catch {
-      toast('Sync failed — check your connection', 'error');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   return (
     <div className="app-container">
@@ -121,21 +92,6 @@ function AppLayout({ user, onLogout }) {
         <header className="topbar">
           <div style={{ fontWeight: 600, fontSize: '0.95rem' }}><PageTitle /></div>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <span
-              title={online ? 'Connected to internet' : 'Offline — changes save locally and sync when reconnected'}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0.25rem 0.5rem',
-                borderRadius: 6,
-                background: online ? 'rgba(16,185,129,0.09)' : 'rgba(245,158,11,0.11)',
-              }}
-            >
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                backgroundColor: online ? '#10b981' : '#f59e0b',
-              }} />
-              {online ? 'Online' : 'Offline'}
-            </span>
             <button
               className="btn btn-secondary"
               style={{ padding: '0.375rem 0.625rem', fontSize: '0.8rem' }}
@@ -143,15 +99,6 @@ function AppLayout({ user, onLogout }) {
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-            </button>
-            <button
-              className="btn btn-secondary"
-              style={{ padding: '0.375rem 0.625rem', fontSize: '0.8rem' }}
-              onClick={handleSync}
-              disabled={syncing || !online}
-              title={online ? 'Sync with cloud' : 'Cannot sync while offline'}
-            >
-              <RefreshCw size={14} className={syncing ? 'spinning' : ''} />
             </button>
             <div style={{ width: 34, height: 34, borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>
               {user?.username?.[0]?.toUpperCase() || 'A'}
@@ -231,7 +178,6 @@ function AuthGate() {
             email: session.user.email,
           });
           setAuthState('app');
-          startAutoSync();
           startRealtime(qc);
           return;
         }
@@ -277,7 +223,6 @@ function AuthGate() {
         onLogin={(u) => {
           setUser({ id: u.id, username: u.username, email: u.email || '' });
           setAuthState('app');
-          startAutoSync();
           startRealtime(qc);
         }}
         onBack={() => setAuthState('landing')}
@@ -290,7 +235,6 @@ function AuthGate() {
       <AppLayout
         user={user}
         onLogout={async () => {
-          stopAutoSync();
           stopRealtime();
           await supabase.auth.signOut().catch(() => {});
           clearSession();
