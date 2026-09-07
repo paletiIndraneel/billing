@@ -29,6 +29,7 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 function clearSession() {
   localStorage.removeItem('lekhya_company_id');
   localStorage.removeItem('lekhya_subscription');
+  queryClient.clear();
 }
 
 const NAV_ITEMS = [
@@ -84,8 +85,6 @@ function AppLayout({ user, onLogout }) {
             </NavLink>
           ))}
         </nav>
-        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        </div>
       </aside>
 
       <main className="main-content">
@@ -221,6 +220,7 @@ function AuthGate() {
     return (
       <Login
         onLogin={(u) => {
+          qc.clear();
           setUser({ id: u.id, username: u.username, email: u.email || '' });
           setAuthState('app');
           startRealtime(qc);
