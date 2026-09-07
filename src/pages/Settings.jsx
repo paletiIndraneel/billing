@@ -10,7 +10,7 @@ import { listLeads } from '../api/leads';
 import { listTransactions } from '../api/transactions';
 import { listExpenses } from '../api/expenses';
 import { listPurchases } from '../api/purchases';
-import { Save, Download, Building2, KeyRound, FileSpreadsheet, Shield, Smartphone, Key, RefreshCw } from 'lucide-react';
+import { Save, Download, Building2, KeyRound, FileSpreadsheet, Shield, Key, RefreshCw } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import { validateGSTIN, validateIFSC, validatePhone, validateEmail } from '../utils/validators';
 import { getSubscription, evaluateAccess, daysRemaining, activateLicense, deactivateSubscription, PLAN_LABELS, TRIAL_DAYS } from '../lib/subscription';
@@ -465,27 +465,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── Multi-Device Access ── */}
-      <div className="card">
-        {sectionTitle(<Smartphone size={20} style={{ color: 'var(--primary)' }} />, 'Multi-Device Access')}
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.6 }}>
-          Lekhya One stores data locally on your device. To use it on multiple devices, export a backup from one device and import it on the other.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-          <div style={{ padding: '1rem', background: 'var(--bg-color)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Step 1: Export on Device A</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Click "Export Full Backup" below to download all your data as a JSON file.</div>
-          </div>
-          <div style={{ padding: '1rem', background: 'var(--bg-color)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Step 2: Import on Device B</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Transfer the JSON file and click "Import Backup" on the other device.</div>
-          </div>
-        </div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.75rem', background: 'rgba(16,185,129,0.06)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '1rem' }}>
-          <strong style={{ color: 'var(--success)' }}>PWA Support:</strong> Install Lekhya One as an app on any device browser (Chrome/Edge: "Add to Home Screen" or "Install App") for a native-like experience.
-        </div>
-      </div>
-
       {/* ── Subscription & License ── */}
       <div className="card">
         {sectionTitle(<Key size={20} style={{ color: '#7c3aed' }} />, 'Subscription & License')}
@@ -591,20 +570,14 @@ export default function Settings() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
           {[
-            { icon: '🔒', title: 'Local Storage', desc: 'All data stays on your device. Nothing is sent to any server.' },
             { icon: '🔑', title: 'Password Protected', desc: 'App access requires username and password login.' },
             { icon: '💾', title: 'Full Backup', desc: 'Export includes invoices, parties, products, expenses, transactions, and leads.' },
-            { icon: '📲', title: 'Offline First', desc: 'Works completely offline — no internet connection required.' },
           ].map(({ icon, title, desc }) => (
             <div key={title} style={{ padding: '0.875rem', background: 'var(--bg-color)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>{icon} <strong style={{ fontSize: '0.875rem' }}>{title}</strong></div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{desc}</div>
             </div>
           ))}
-        </div>
-
-        <div style={{ padding: '0.875rem', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          <strong style={{ color: 'var(--warning)' }}>Recommendation:</strong> Export a backup at least once a week and store it in a cloud storage service (Google Drive, OneDrive, etc.) to prevent data loss.
         </div>
       </div>
     </div>
