@@ -1,8 +1,8 @@
-# Lekhya One v1.0
+# NEXAURA v1.0
 
-**Web GST billing & business-management app for Indian businesses**
+**Business, connected.** — Web GST billing & business-management app for Indian businesses
 
-Lekhya One is a single-page web app for GST invoicing, inventory management,
+NEXAURA is a single-page web app for GST invoicing, inventory management,
 purchase orders, expense tracking, and compliance reporting. Sign in on any
 device — Supabase is the single source of truth and your data is always
 there.
@@ -123,4 +123,4 @@ supabase/
 
 ## License
 
-Proprietary — Lekhya One. All rights reserved.
+Proprietary — NEXAURA. All rights reserved.

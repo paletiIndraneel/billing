@@ -88,8 +88,8 @@ export default function SetupWizard({ onComplete }) {
     <div className="auth-screen">
       <div className="auth-card" style={{ maxWidth: 520 }}>
         <div className="auth-logo">
-          <img src={logoUrl} alt="Lekhya One" style={{ width: 52, height: 52, margin: '0 auto 0.75rem', display: 'block', objectFit: 'contain' }} />
-          <h1 style={{ fontSize: '1.625rem', fontWeight: 700, marginBottom: '0.25rem' }}>Welcome to Lekhya One</h1>
+          <img src={logoUrl} alt="NEXAURA" style={{ width: 52, height: 52, margin: '0 auto 0.75rem', display: 'block', objectFit: 'contain' }} />
+          <h1 style={{ fontSize: '1.625rem', fontWeight: 700, marginBottom: '0.25rem' }}>Welcome to NEXAURA</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Let's set up your business account</p>
         </div>
 

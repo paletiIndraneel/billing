@@ -1,5 +1,5 @@
 /**
- * Lekhya One — Subscription Management
+ * NEXAURA — Subscription Management
  *
  * Plans: trial (14 days) → basic / pro (annual / monthly)
  * Storage: localStorage['lekhya_subscription'] (JSON); licenses validated via Supabase RPC

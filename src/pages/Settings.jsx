@@ -185,7 +185,7 @@ export default function Settings() {
       });
 
       const date = new Date().toISOString().split('T')[0];
-      XLSX.writeFile(wb, `lekhya-backup-${date}.xlsx`);
+      XLSX.writeFile(wb, `nexaura-backup-${date}.xlsx`);
 
       toast('Full backup exported as Excel (multi-sheet)!', 'success');
     } catch (err) {

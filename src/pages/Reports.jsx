@@ -627,7 +627,7 @@ export default function Reports() {
         b2b: Object.values(b2bMap),
         b2cs: b2csList,
         hsn: { data: hsnData },
-        _meta: { generated: new Date().toISOString(), app: 'Lekhya One v1.0' },
+        _meta: { generated: new Date().toISOString(), app: 'NEXAURA v1.0' },
       };
 
       downloadJSON(gstr1, `GSTR1-${fp}-${companyGstin || 'export'}.json`);
@@ -690,7 +690,7 @@ export default function Reports() {
         },
         _meta: {
           generated: new Date().toISOString(),
-          app: 'Lekhya One v1.0',
+          app: 'NEXAURA v1.0',
           outward_invoices: filteredSales.length,
           inward_bills: filteredPurchases.length,
           taxable_turnover: r(outTaxable),
@@ -777,7 +777,7 @@ export default function Reports() {
                   const pad = (str, len) => String(str).padEnd(len, ' ');
                   const rpad = (str, len) => String(str).padStart(len, ' ');
                   const divider = '─'.repeat(38);
-                  const msg = `*Lekhya One — Business Summary* 📊\nPeriod: ${periodStr}\n\n\`\`\`\n${divider}\n FINANCIALS SUMMARY\n${divider}\n${pad('Description', 20)} ${rpad('Amount', 17)}\n${divider}\n${pad('Total Revenue', 20)} ${rpad(fmtINR(totalRevenue), 17)}\n${pad('Sales Returns', 20)} ${rpad('-' + fmtINR(totalSalesReturns), 17)}\n${pad('Net Revenue', 20)} ${rpad(fmtINR(netRevenue), 17)}\n${pad('Cost of Purchases', 20)} ${rpad('-' + fmtINR(totalPurchases), 17)}\n${pad('Operating Expenses', 20)} ${rpad('-' + fmtINR(totalExpenses), 17)}\n${divider}\n${pad('Net Profit', 20)} ${rpad(fmtINR(netProfit), 17)}\n${divider}\n\n GST POSITION\n${divider}\n${pad('Output GST (Collected)', 20)} ${rpad(fmtINR(totalGSTCollected), 17)}\n${pad('Input GST / ITC', 20)} ${rpad('-' + fmtINR(totalGSTPaid), 17)}\n${divider}\n${pad('Net GST Liability', 20)} ${rpad(fmtINR(netGSTLiability), 17)}\n${divider}\n\`\`\`\n_Generated: ${new Date().toLocaleString('en-IN')}_`;
+                  const msg = `*NEXAURA — Business Summary* 📊\nPeriod: ${periodStr}\n\n\`\`\`\n${divider}\n FINANCIALS SUMMARY\n${divider}\n${pad('Description', 20)} ${rpad('Amount', 17)}\n${divider}\n${pad('Total Revenue', 20)} ${rpad(fmtINR(totalRevenue), 17)}\n${pad('Sales Returns', 20)} ${rpad('-' + fmtINR(totalSalesReturns), 17)}\n${pad('Net Revenue', 20)} ${rpad(fmtINR(netRevenue), 17)}\n${pad('Cost of Purchases', 20)} ${rpad('-' + fmtINR(totalPurchases), 17)}\n${pad('Operating Expenses', 20)} ${rpad('-' + fmtINR(totalExpenses), 17)}\n${divider}\n${pad('Net Profit', 20)} ${rpad(fmtINR(netProfit), 17)}\n${divider}\n\n GST POSITION\n${divider}\n${pad('Output GST (Collected)', 20)} ${rpad(fmtINR(totalGSTCollected), 17)}\n${pad('Input GST / ITC', 20)} ${rpad('-' + fmtINR(totalGSTPaid), 17)}\n${divider}\n${pad('Net GST Liability', 20)} ${rpad(fmtINR(netGSTLiability), 17)}\n${divider}\n\`\`\`\n_Generated: ${new Date().toLocaleString('en-IN')}_`;
                   
                   window.open(`https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(msg)}`, '_blank');
                 }}

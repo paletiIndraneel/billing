@@ -53,7 +53,7 @@ function PageTitle() {
     '/reports': 'GST Reports', '/settings': 'Settings',
   };
   if (pathname.startsWith('/ledger')) return 'Account Ledger';
-  return titles[pathname] || 'Lekhya One';
+  return titles[pathname] || 'NEXAURA';
 }
 
 function useTheme() {
@@ -74,7 +74,7 @@ function AppLayout({ user, onLogout }) {
       <aside className="sidebar">
         <div className="sidebar-header">
           <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }} />
-          Lekhya One
+          NEXAURA
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
@@ -196,7 +196,7 @@ function AuthGate() {
         <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <FileText size={24} />
         </div>
-        <span>Loading Lekhya One…</span>
+        <span>Loading NEXAURA…</span>
       </div>
     );
   }

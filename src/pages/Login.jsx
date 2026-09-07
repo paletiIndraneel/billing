@@ -256,8 +256,8 @@ export default function Login({ onLogin, onBack }) {
     <div className="auth-screen">
       <div className="auth-card" style={{ maxWidth: 400 }}>
         <div className="auth-logo">
-          <img src={logoUrl} alt="Lekhya One" style={{ width: 56, height: 56, margin: '0 auto 1rem', display: 'block', objectFit: 'contain' }} />
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, marginBottom: '0.25rem' }}>Lekhya One</h1>
+          <img src={logoUrl} alt="NEXAURA" style={{ width: 56, height: 56, margin: '0 auto 1rem', display: 'block', objectFit: 'contain' }} />
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, marginBottom: '0.25rem' }}>NEXAURA</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Sign in to your account</p>
         </div>
 
@@ -299,7 +299,7 @@ export default function Login({ onLogin, onBack }) {
           textAlign: 'center', marginTop: '2rem', fontSize: '0.75rem',
           color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '1rem',
         }}>
-          Lekhya One · zero
+          NEXAURA · Business, connected.
         </p>
       </div>
     </div>

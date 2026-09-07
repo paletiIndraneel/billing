@@ -5,11 +5,11 @@ export default function Landing({ onSignIn, onSignUp }) {
   return (
     <div className="auth-screen">
       <div className="auth-card" style={{ maxWidth: 420, textAlign: 'center' }}>
-        <img src={logoUrl} alt="Lekhya One" style={{ width: 68, height: 68, margin: '0 auto 1.25rem', display: 'block', objectFit: 'contain' }} />
+        <img src={logoUrl} alt="NEXAURA" style={{ width: 68, height: 68, margin: '0 auto 1.25rem', display: 'block', objectFit: 'contain' }} />
 
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '0.375rem' }}>Lekhya One</h1>
+        <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '0.375rem' }}>NEXAURA</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2.75rem' }}>
-          GST Billing &amp; Business Management
+          Business, connected.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>

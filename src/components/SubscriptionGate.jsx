@@ -77,7 +77,7 @@ function SubscriptionExpired({ sub, onActivated }) {
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.75rem', lineHeight: 1.6 }}>
           {sub?.status === 'suspended'
-            ? 'Your Lekhya One license has been suspended. Please contact support or enter a new license key.'
+            ? 'Your NEXAURA license has been suspended. Please contact support or enter a new license key.'
             : `Your ${PLAN_LABELS[sub?.plan] || 'trial'} has expired. Enter your license key to restore access. Your data is safe.`}
         </p>
 
@@ -143,7 +143,7 @@ function ActivationModal({ onClose, onActivated }) {
       <div style={box} onClick={e => e.stopPropagation()}>
         <h3 style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '1.1rem' }}>Activate License</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
-          Enter your Lekhya One license key to unlock full access.
+          Enter your NEXAURA license key to unlock full access.
         </p>
         {success ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>

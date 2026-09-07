@@ -395,7 +395,7 @@ function printPOSReceipt(invoice, party, lineItems, company) {
     company.upiId ? pad('UPI:', company.upiId) : '',
     line,
     center('Thank you for your business!'),
-    center('Powered by Lekhya One'),
+    center('Powered by NEXAURA'),
   ].filter(Boolean).join('\n');
 
   const html = `<!DOCTYPE html><html><head>
