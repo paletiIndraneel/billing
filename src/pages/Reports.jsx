@@ -3,6 +3,7 @@ import { useTable } from '../api/useTable';
 import { QK } from '../api/realtime';
 import { getCompany } from '../api/company';
 import { listInvoices } from '../api/invoices';
+import { listInvoiceItems } from '../api/invoiceItems';
 import { listExpenses } from '../api/expenses';
 import { listParties } from '../api/parties';
 import { listTransactions } from '../api/transactions';
@@ -86,7 +87,14 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 export default function Reports() {
-  const invoices = useTable(QK.invoices, listInvoices);
+  const invoicesRaw = useTable(QK.invoices, listInvoices);
+  const invoiceItems = useTable(QK.invoiceItems, listInvoiceItems);
+  // invoices table has no lineItems column — attach invoice_items rows so all report math resolves.
+  const invoices = useMemo(() => {
+    const byInv = {};
+    for (const it of invoiceItems) (byInv[it.invoiceId] ||= []).push(it);
+    return invoicesRaw.map(inv => ({ ...inv, lineItems: byInv[inv.id] || [] }));
+  }, [invoicesRaw, invoiceItems]);
   const expenses = useTable(QK.expenses, listExpenses);
   const parties = useTable(QK.parties, listParties);
   const transactions = useTable(QK.transactions, listTransactions);

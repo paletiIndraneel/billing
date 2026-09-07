@@ -908,7 +908,7 @@ export default function Billing() {
         const validPmts = payments.filter(p => Number(p.amount) > 0);
         if (isRealSale && validPmts.length) {
           for (const pmt of validPmts) {
-            await createTransaction({
+            const txn = await createTransaction({
               date: new Date().toISOString().slice(0, 10),
               partyId: party.id,
               invoiceId: inv.id,
@@ -919,6 +919,7 @@ export default function Billing() {
               notes: `${invoiceType} invoice ${invoiceNumber}`,
               autoRecorded: true,
             });
+            applied.push(['txn', txn.id]);
           }
         }
       } catch (err) {
@@ -926,6 +927,7 @@ export default function Billing() {
         for (const [kind, ref] of applied.reverse()) {
           try {
             if (kind === 'stock') await adjustStock({ variantId: ref.id, productId: ref.productId, packsDelta: -ref.sign * ref.qty, type: 'void', reference: `ROLLBACK:${invoiceNumber}` });
+            if (kind === 'txn') await deleteTransaction(ref);
             if (kind === 'invoice') { await deleteItemsByInvoice(ref); await deleteInvoice(ref); }
           } catch { /* swallow — nothing better to do */ }
         }
