@@ -76,7 +76,7 @@ All business data lives in Supabase (Postgres). Every table is protected by
 per-tenant Row-Level Security keyed on the `company_members` table, so a
 signed-in user only ever sees rows for companies they belong to.
 
-Key tables: `parties`, `products`, `variants`, `invoices`, `invoice_items`,
+Key tables: `parties`, `products`, `product_variants`, `invoices`, `invoice_items`,
 `transactions`, `expenses`, `purchases`, `stock_ledger`, `batches`, `leads`,
 plus company / membership tables.
 
