@@ -65,7 +65,7 @@ Exact column names/types/nullability/defaults are finalized in `001_schema.sql` 
   ))
   ```
   `with check` identical on insert/update. `stock_ledger`: `select` + `insert` only, no `update`/`delete`.
-- Client still passes `.eq('company_id', cid)` for query planning; RLS is the guard.
+- RLS is the sole guard; `listX` helpers do not add an explicit `.eq('company_id', …)` — see §9.1 (I8).
 
 ### 2.4 Settings → `companies` + localStorage
 
@@ -279,6 +279,23 @@ Keep the state machine (`loading → landing → login → setup → reset-passw
 | `activities` on parties left as jsonb | Acceptable — freeform note log, never queried |
 | Realtime quota / connection limits on Supabase free tier | Single channel, all tables; acceptable for expected scale |
 | No CI — gates are manual | Explicit checklist in plan; each phase self-contained |
+
+### 9.1 Post-implementation resolutions (Phase 3)
+
+Two items deferred during the offline-teardown branch were investigated and closed. No Phase 3 migration resulted from either.
+
+**I7 — `companies` / `company_members` RLS scope.**
+
+- Status verified 2026-09-07 via Supabase `list_tables`: `row level security = enabled` on `companies` **and** `company_members` (and on the pre-existing `payments` / `subscriptions` tables). `get_advisors(security)` reports **no** `rls_disabled_in_public` or `rls_enabled_no_policy` finding for any business table or for `companies`.
+- The policies rely on a pre-existing `my_company_ids()` `SECURITY DEFINER` helper function that predates migrations `001`–`004`.
+- **Resolution:** no Phase 3 migration required — tenant isolation on `companies` is enforced. Follow-up (not blocking): dump the exact `companies` policy predicate from `pg_policies` and document whether it is owner-only or any-active-member; for the current one-owner-per-company product either scoping is acceptable.
+
+**I8 — `listX` helpers omit an explicit `company_id` filter.**
+
+- Confirmed: `listParties` / `listInvoices` / `listProducts` (and the other table `listX` in `src/api/`) issue `select('*')` with no `.eq('company_id', cid())`; row scoping is done entirely by RLS. Spec §2.3 previously said "the client still passes `.eq('company_id', cid)` for query planning".
+- **Resolution:** accept as-is. The RLS policy's own `company_id in (select … from company_members where user_id = auth.uid() and active)` already restricts the rows; with one active company per user the extra `.eq` is a redundant planner hint with no security or correctness effect. Adding it to ~11 functions is churn without benefit. §2.3's wording has been updated to reflect that the explicit client filter was dropped as redundant-with-RLS.
+
+**Pre-existing security-advisor items (noted, not acted on).** `get_advisors(security)` also surfaces four pre-existing WARN/INFO items unrelated to this branch: `subscriptions` RLS-enabled-with-no-policy (INFO); three `SECURITY DEFINER` functions callable by the `authenticated` role — `activate_license`, `get_license_status`, `my_company_ids` (the license/membership infra) (WARN); and Auth "leaked password protection disabled", a project-level setting (WARN). All are out of scope for the offline-teardown branch and are recorded here so a later review does not re-litigate them.
 
 ## 10. Out of scope
 
