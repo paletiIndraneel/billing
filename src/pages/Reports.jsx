@@ -84,7 +84,6 @@ const TABS = [
 ];
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 export default function Reports() {
   const invoicesRaw = useTable(QK.invoices, listInvoices);
@@ -105,7 +104,6 @@ export default function Reports() {
   const toast = useToast();
 
   const [tab, setTab] = useState('overview');
-  const [filterYear, setFilterYear] = useState(CURRENT_YEAR);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [deadStockDays, setDeadStockDays] = useState(90);
@@ -656,7 +654,6 @@ export default function Reports() {
       const itcIGST = filteredPurchases.filter(i => i.taxType === 'IGST').reduce((s, i) => s + (i.taxAmount || 0), 0);
       const itcCGST = filteredPurchases.filter(i => i.taxType !== 'IGST').reduce((s, i) => s + (i.taxAmount || 0) / 2, 0);
       const itcSGST = itcCGST;
-      const itcTaxable = filteredPurchases.reduce((s, i) => s + (i.subtotal || 0), 0);
 
       const r = (n) => Math.round((n || 0) * 100) / 100;
 

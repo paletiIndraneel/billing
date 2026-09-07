@@ -13,7 +13,7 @@ import { listPurchases } from '../api/purchases';
 import { Save, Download, Building2, KeyRound, FileSpreadsheet, Shield, Key, RefreshCw } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import { validateGSTIN, validateIFSC, validatePhone, validateEmail } from '../utils/validators';
-import { getSubscription, evaluateAccess, daysRemaining, activateLicense, deactivateSubscription, PLAN_LABELS, TRIAL_DAYS } from '../lib/subscription';
+import { getSubscription, evaluateAccess, daysRemaining, activateLicense, deactivateSubscription, PLAN_LABELS } from '../lib/subscription';
 
 const INVOICE_THEMES = [
   { key: 'classic', label: 'Classic Blue', color: '#4F46E5' },

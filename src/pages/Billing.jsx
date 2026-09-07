@@ -481,7 +481,7 @@ export default function Billing() {
   }, [productVariants, products]);
 
   const [tab, setTab] = useState('new');
-  const [invoiceType, setInvoiceType] = useState('Sales');
+  const invoiceType = 'Sales';
   const [selectedParty, setSelectedParty] = useState('');
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState('');
@@ -2421,7 +2421,6 @@ export default function Billing() {
       {/* ── Credit/Debit Note Modal ── */}
       {noteModal && (() => {
         const { inv, noteType } = noteModal;
-        const party = parties?.find(p => p.id === inv.partyId);
         const label = noteType === 'CreditNote' ? 'Credit Note' : 'Debit Note';
         return (
           <Modal title={`Issue ${label} — Ref: ${inv.invoiceNumber}`} onClose={() => setNoteModal(null)} size="lg">
