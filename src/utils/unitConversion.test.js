@@ -59,7 +59,7 @@ describe('UNIT_OPTIONS', () => {
     for (const o of UNIT_OPTIONS) {
       expect(typeof o.value).toBe('string');
       expect(typeof o.label).toBe('string');
-      expect(['mass', 'volume', 'count']).toContain(o.dim);
+      expect(['mass', 'volume', 'length', 'energy', 'count']).toContain(o.dim);
     }
   });
 

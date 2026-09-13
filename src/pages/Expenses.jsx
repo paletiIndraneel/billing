@@ -16,6 +16,8 @@ const CATEGORIES = [
   'Insurance', 'Taxes & Fees', 'Entertainment', 'Other'
 ];
 const PAYMENT_METHODS = ['Bank Transfer', 'Cash', 'Cheque', 'UPI', 'Credit Card', 'Other'];
+const FREQUENCIES = ['One-time', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+const RECURRING_FREQUENCIES = ['Weekly', 'Monthly', 'Quarterly', 'Yearly'];
 
 const EMPTY_FORM = {
   date: new Date().toISOString().slice(0, 10),
@@ -23,7 +25,8 @@ const EMPTY_FORM = {
   description: '',
   amount: '',
   paymentMethod: 'Bank Transfer',
-  vendorName: ''
+  vendorName: '',
+  frequency: 'One-time',
 };
 
 const CAT_COLORS = {
@@ -49,6 +52,7 @@ export default function Expenses() {
 
   const [modal, setModal] = useState(null);
   const [filterCat, setFilterCat] = useState('All');
+  const [filterFreq, setFilterFreq] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -68,6 +72,7 @@ export default function Expenses() {
         await updateExp(id, {
           date: rest.date, category: rest.category, amount: rest.amount,
           paymentMethod: rest.paymentMethod, vendorName: rest.vendorName, description: rest.description,
+          frequency: rest.frequency,
         });
         const linked = (await listTransactionsByExpense(id))[0];
         if (linked) {
@@ -82,6 +87,7 @@ export default function Expenses() {
         const exp = await createExp({
           date: data.date, category: data.category, amount: data.amount,
           paymentMethod: data.paymentMethod, vendorName: data.vendorName, description: data.description,
+          frequency: data.frequency,
         });
         await createTransaction({
           date: data.date,
@@ -116,10 +122,13 @@ export default function Expenses() {
 
   let filtered = expenses || [];
   if (filterCat !== 'All') filtered = filtered.filter(e => e.category === filterCat);
+  if (filterFreq !== 'All') filtered = filtered.filter(e => (e.frequency || 'One-time') === filterFreq);
   if (dateFrom) filtered = filtered.filter(e => e.date >= dateFrom);
   if (dateTo) filtered = filtered.filter(e => e.date <= dateTo);
 
   const totalAmount = filtered.reduce((s, e) => s + (e.amount || 0), 0);
+  const recurringAmount = filtered.filter(e => RECURRING_FREQUENCIES.includes(e.frequency)).reduce((s, e) => s + (e.amount || 0), 0);
+  const oneOffAmount = totalAmount - recurringAmount;
 
   const catTotals = {};
   filtered.forEach(e => {
@@ -149,15 +158,15 @@ export default function Expenses() {
 
     autoTable(doc, {
       startY: y,
-      head: [['Date', 'Category', 'Description', 'Vendor', 'Payment Mode', 'Amount (₹)']],
+      head: [['Date', 'Category', 'Frequency', 'Description', 'Vendor', 'Payment Mode', 'Amount (₹)']],
       body: filtered.map(e => [
-        fmtDate(e.date), e.category, e.description || '—',
+        fmtDate(e.date), e.category, e.frequency || 'One-time', e.description || '—',
         e.vendorName || '—', e.paymentMethod,
         (e.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
       ]),
       headStyles: { fillColor: [79, 70, 229], fontSize: 8, fontStyle: 'bold' },
       bodyStyles: { fontSize: 8 },
-      columnStyles: { 5: { halign: 'right' } },
+      columnStyles: { 6: { halign: 'right' } },
       margin: { left: 14, right: 14 }
     });
 
@@ -204,6 +213,14 @@ export default function Expenses() {
           <div style={{ fontWeight: 700, fontSize: '1.25rem', color: 'var(--danger)' }}>{fmtINR(totalAmount)}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{filtered.length} records</div>
         </div>
+        <div className="card" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem', borderLeft: '4px solid #8B5CF6' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recurring (Weekly+)</div>
+          <div style={{ fontWeight: 700, fontSize: '1.25rem', color: '#8B5CF6' }}>{fmtINR(recurringAmount)}</div>
+        </div>
+        <div className="card" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem', borderLeft: '4px solid #F59E0B' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>One-time / Daily</div>
+          <div style={{ fontWeight: 700, fontSize: '1.25rem', color: '#F59E0B' }}>{fmtINR(oneOffAmount)}</div>
+        </div>
         {sortedCats.slice(0, 4).map(([cat, amt]) => (
           <div key={cat} className="card" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem', borderLeft: `4px solid ${CAT_COLORS[cat] || '#6B7280'}` }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{cat}</div>
@@ -222,11 +239,15 @@ export default function Expenses() {
             <option value="All">All Categories</option>
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
+          <select className="form-input" style={{ width: 'auto' }} value={filterFreq} onChange={e => setFilterFreq(e.target.value)}>
+            <option value="All">All Frequencies</option>
+            {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+          </select>
           <input type="date" className="form-input" style={{ width: 'auto' }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" />
           <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>to</span>
           <input type="date" className="form-input" style={{ width: 'auto' }} value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" />
-          {(filterCat !== 'All' || dateFrom || dateTo) && (
-            <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => { setFilterCat('All'); setDateFrom(''); setDateTo(''); }}>
+          {(filterCat !== 'All' || filterFreq !== 'All' || dateFrom || dateTo) && (
+            <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={() => { setFilterCat('All'); setFilterFreq('All'); setDateFrom(''); setDateTo(''); }}>
               Clear Filters
             </button>
           )}
@@ -238,7 +259,7 @@ export default function Expenses() {
         {filtered.length === 0 ? (
           <div className="empty-state">
             <Receipt size={48} className="empty-state-icon" />
-            <p>No expenses recorded{filterCat !== 'All' || dateFrom || dateTo ? ' for the selected filters' : ' yet'}.</p>
+            <p>No expenses recorded{filterCat !== 'All' || filterFreq !== 'All' || dateFrom || dateTo ? ' for the selected filters' : ' yet'}.</p>
             <button className="btn btn-primary" style={{ marginTop: '0.75rem' }} onClick={openAdd}>
               <Plus size={15} /> Add First Expense
             </button>
@@ -250,6 +271,7 @@ export default function Expenses() {
                 <tr>
                   <th>Date</th>
                   <th>Category</th>
+                  <th>Frequency</th>
                   <th>Description</th>
                   <th>Vendor / Payee</th>
                   <th>Payment Mode</th>
@@ -273,6 +295,7 @@ export default function Expenses() {
                           {exp.category}
                         </span>
                       </td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{exp.frequency || 'One-time'}</td>
                       <td style={{ fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: 200 }}>{exp.description || '—'}</td>
                       <td style={{ fontSize: '0.875rem' }}>{exp.vendorName || '—'}</td>
                       <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{exp.paymentMethod}</td>
@@ -298,7 +321,7 @@ export default function Expenses() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan="5" style={{ fontWeight: 600, paddingTop: '0.75rem', borderTop: '2px solid var(--border)', fontSize: '0.875rem' }}>
+                  <td colSpan="6" style={{ fontWeight: 600, paddingTop: '0.75rem', borderTop: '2px solid var(--border)', fontSize: '0.875rem' }}>
                     Total ({filtered.length} expenses)
                   </td>
                   <td style={{ fontWeight: 700, color: 'var(--danger)', paddingTop: '0.75rem', borderTop: '2px solid var(--border)', textAlign: 'right', fontSize: '1rem' }}>
@@ -363,6 +386,13 @@ export default function Expenses() {
                 <input required type="number" min="0.01" step="0.01" className="form-input"
                   value={modal.amount} onChange={e => setModal(m => ({ ...m, amount: e.target.value }))}
                   placeholder="0.00" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Frequency</label>
+                <select className="form-input" value={modal.frequency || 'One-time'}
+                  onChange={e => setModal(m => ({ ...m, frequency: e.target.value }))}>
+                  {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Payment Method</label>

@@ -3,7 +3,8 @@ import { QK, TABLES } from './realtime';
 
 const EXPECTED = [
   'parties', 'products', 'variants', 'invoices', 'invoiceItems', 'transactions',
-  'expenses', 'purchases', 'stockLedger', 'batches', 'leads', 'company',
+  'expenses', 'purchases', 'stockLedger', 'batches', 'leads', 'company', 'priceHistory',
+  'orders', 'orderItems',
 ];
 
 describe('realtime QK', () => {

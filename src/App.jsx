@@ -1,5 +1,5 @@
 import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon, Menu } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon, Menu, Truck } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
 import logo from './assets/Nexaura logo.png';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -23,12 +23,12 @@ import Payments from './pages/Payments';
 import Expenses from './pages/Expenses';
 import Reports from './pages/Reports';
 import Purchases from './pages/Purchases';
+import Orders from './pages/Orders';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
 function clearSession() {
   localStorage.removeItem('lekhya_company_id');
-  localStorage.removeItem('lekhya_subscription');
   queryClient.clear();
 }
 
@@ -39,6 +39,7 @@ const NAV_ITEMS = [
   { to: '/payments', icon: IndianRupee, label: 'Payments' },
   { to: '/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/purchases', icon: ShoppingCart, label: 'Purchases' },
+  { to: '/orders', icon: Truck, label: 'Orders & Shipment' },
   { to: '/inventory', icon: Package, label: 'Inventory' },
   { to: '/reports', icon: BarChart2, label: 'Reports' },
   { to: '/settings', icon: Settings, label: 'Settings' },
@@ -49,7 +50,7 @@ function PageTitle() {
   const titles = {
     '/': 'Dashboard', '/crm': 'Customers & Vendors', '/billing': 'GST Billing',
     '/payments': 'Payments & Ledger', '/expenses': 'Expense Tracking',
-    '/purchases': 'Purchase Management', '/inventory': 'Inventory & Stock',
+    '/purchases': 'Purchase Management', '/orders': 'Orders & Shipment', '/inventory': 'Inventory & Stock',
     '/reports': 'GST Reports', '/settings': 'Settings',
   };
   if (pathname.startsWith('/ledger')) return 'Account Ledger';
@@ -133,6 +134,7 @@ function AppLayout({ user, onLogout }) {
             <Route path="/reports" element={<ErrorBoundary label="Reports"><Reports /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary label="Settings"><SettingsPage /></ErrorBoundary>} />
             <Route path="/purchases" element={<ErrorBoundary label="Purchases"><Purchases /></ErrorBoundary>} />
+            <Route path="/orders" element={<ErrorBoundary label="Orders & Shipment"><Orders /></ErrorBoundary>} />
             <Route path="/ledger/:partyId" element={<ErrorBoundary label="Ledger"><Ledger /></ErrorBoundary>} />
           </Routes>
         </div>

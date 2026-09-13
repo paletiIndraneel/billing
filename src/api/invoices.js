@@ -12,6 +12,11 @@ export const fromRow = (r) => r && ({
   date: r.date,
   dueDate: r.due_date,
   taxType: r.tax_type,
+  shipToName: r.ship_to_name,
+  shipToAddress: r.ship_to_address,
+  shipToGstin: r.ship_to_gstin,
+  billingPeriodFrom: r.billing_period_from,
+  billingPeriodTo: r.billing_period_to,
   grossSubtotal: r.gross_subtotal,
   itemDiscountAmt: r.item_discount_amt,
   discountPct: r.discount_pct,
@@ -38,6 +43,11 @@ export const toRow = (d) => {
   if ('date' in d) out.date = d.date;
   if ('dueDate' in d) out.due_date = d.dueDate || null;
   if ('taxType' in d) out.tax_type = d.taxType || null;
+  if ('shipToName' in d) out.ship_to_name = d.shipToName || null;
+  if ('shipToAddress' in d) out.ship_to_address = d.shipToAddress || null;
+  if ('shipToGstin' in d) out.ship_to_gstin = d.shipToGstin || null;
+  if ('billingPeriodFrom' in d) out.billing_period_from = d.billingPeriodFrom || null;
+  if ('billingPeriodTo' in d) out.billing_period_to = d.billingPeriodTo || null;
   if ('grossSubtotal' in d) out.gross_subtotal = d.grossSubtotal ?? null;
   if ('itemDiscountAmt' in d) out.item_discount_amt = d.itemDiscountAmt ?? null;
   if ('discountPct' in d) out.discount_pct = d.discountPct ?? null;

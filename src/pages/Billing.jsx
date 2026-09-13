@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { updateOrder } from '../api/orders';
 import { useTable } from '../api/useTable';
 import { QK } from '../api/realtime';
 import { listParties, createParty } from '../api/parties';
@@ -155,6 +157,9 @@ async function buildPDF(invoice, party, lineItems, company, themeKey = 'classic'
     ['Status', invoice.status || 'Pending']
   ];
   if (invoice.dueDate) metaRows.splice(2, 0, ['Due Date', fmtDate(invoice.dueDate)]);
+  if (invoice.billingPeriodFrom && invoice.billingPeriodTo) {
+    metaRows.push(['Billing Period', `${fmtDate(invoice.billingPeriodFrom)} to ${fmtDate(invoice.billingPeriodTo)}`]);
+  }
   metaRows.forEach(([label, val]) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(label + ':', mx, my);
     doc.setFont('helvetica', 'normal'); doc.text(val, mx + 28, my);
@@ -177,6 +182,23 @@ async function buildPDF(invoice, party, lineItems, company, themeKey = 'classic'
   if (party.gstin) { doc.text(`GSTIN: ${party.gstin}`, L, by); by += 4.5; }
   if (party.address) { doc.text(party.address, L, by); by += 4.5; }
   if (party.phone) { doc.text(`Phone: ${party.phone}`, L, by); by += 4.5; }
+
+  if (invoice.shipToName || invoice.shipToAddress) {
+    let shipY = sepY + 6;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+    doc.text('SHIP TO', mx, shipY);
+    shipY += 4.5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30);
+    if (invoice.shipToName) { doc.text(invoice.shipToName, mx, shipY); shipY += 4.5; }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(80, 80, 80);
+    if (invoice.shipToGstin) { doc.text(`GSTIN: ${invoice.shipToGstin}`, mx, shipY); shipY += 4.5; }
+    if (invoice.shipToAddress) {
+      const shipLines = doc.splitTextToSize(invoice.shipToAddress, 70);
+      shipLines.forEach(line => { doc.text(line, mx, shipY); shipY += 4.5; });
+    }
+    by = Math.max(by, shipY);
+  }
+
   doc.line(L, by + 3, R, by + 3);
 
   const tableHead = [['Sr.', 'Item Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'Disc%', 'GST%', 'Amount']];
@@ -444,6 +466,9 @@ const PAYMENT_METHODS = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Credit'];
 
 export default function Billing() {
   const qc = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [prefillOrderId, setPrefillOrderId] = useState(null);
   const parties = useTable(QK.parties, listParties);
   const products = useTable(QK.products, listProducts);
   const productVariants = useTable(QK.variants, listVariants);
@@ -517,6 +542,12 @@ export default function Billing() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [historyPage, setHistoryPage] = useState(1);
+  const [shipToSame, setShipToSame] = useState(true);
+  const [shipToName, setShipToName] = useState('');
+  const [shipToAddress, setShipToAddress] = useState('');
+  const [shipToGstin, setShipToGstin] = useState('');
+  const [billingPeriodFrom, setBillingPeriodFrom] = useState('');
+  const [billingPeriodTo, setBillingPeriodTo] = useState('');
 
   // Multi-tab billing: payments per active bill + held bills array
   const [payments, setPayments] = useState([]); // [{ method, amount, amountStr }]
@@ -537,6 +568,21 @@ export default function Billing() {
       setCompanyName(c?.name || '');
     });
   }, []);
+
+  // Prefill from an Order (Orders & Shipment page → "Convert to Invoice").
+  // Runs once variantsForBilling is loaded so items can be matched by variantId.
+  useEffect(() => {
+    const prefill = location.state?.prefillOrder;
+    if (!prefill || !variantsForBilling.length) return;
+    setSelectedParty(prefill.partyId || '');
+    setInvoiceItems(prefill.items.map(item => {
+      const v = variantsForBilling.find(x => x.id === item.variantId);
+      if (!v) return null;
+      return { ...v, rate: item.rate || v.sellingPrice, qty: item.qty, qtyStr: String(item.qty), itemDiscountPct: 0, discStr: '0' };
+    }).filter(Boolean));
+    setPrefillOrderId(prefill.orderId);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, variantsForBilling]);
 
 
   useEffect(() => {
@@ -569,6 +615,7 @@ export default function Billing() {
       selectedProduct, productSearch, quantityStr,
       shipping, discountPct, dueDate, notes, terms,
       invoiceTheme, paymentStatus, savedInvoice, draftId, payments,
+      shipToSame, shipToName, shipToAddress, shipToGstin, billingPeriodFrom, billingPeriodTo,
     };
   }
 
@@ -590,6 +637,12 @@ export default function Billing() {
     setSavedInvoice(snap.savedInvoice || null);
     setDraftId(snap.draftId || null);
     setPayments(snap.payments || []);
+    setShipToSame(snap.shipToSame ?? true);
+    setShipToName(snap.shipToName || '');
+    setShipToAddress(snap.shipToAddress || '');
+    setShipToGstin(snap.shipToGstin || '');
+    setBillingPeriodFrom(snap.billingPeriodFrom || '');
+    setBillingPeriodTo(snap.billingPeriodTo || '');
   }
 
   function resetCurrentBill() {
@@ -599,6 +652,8 @@ export default function Billing() {
     setDueDate(''); setNotes(''); setTerms('');
     setInvoiceTheme('classic'); setPaymentStatus('Pending');
     setSavedInvoice(null); setDraftId(null); setPayments([]);
+    setShipToSame(true); setShipToName(''); setShipToAddress(''); setShipToGstin('');
+    setBillingPeriodFrom(''); setBillingPeriodTo('');
   }
 
   function addBillTab() {
@@ -664,7 +719,7 @@ export default function Billing() {
     const v = variantsForBilling?.find(v => v.id === selectedProduct);
     if (!v) return;
     const rate = v.sellingPrice;
-    const qty = Math.max(1, parseInt(quantityStr) || 1);
+    const qty = Math.max(0.001, parseFloat(quantityStr) || 1);
     const existing = invoiceItems.findIndex(i => i.id === v.id);
     if (existing >= 0) {
       const updated = [...invoiceItems];
@@ -683,15 +738,15 @@ export default function Billing() {
 
   // Allow free-form typing (empty string while backspacing); enforce min=1 on blur
   const updateQtyStr = (index, raw) => {
-    const digits = raw.replace(/[^0-9]/g, '');
+    const digits = raw.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
     const updated = [...invoiceItems];
-    updated[index] = { ...updated[index], qtyStr: digits, qty: digits === '' ? 0 : (parseInt(digits) || 0) };
+    updated[index] = { ...updated[index], qtyStr: digits, qty: digits === '' ? 0 : (parseFloat(digits) || 0) };
     setInvoiceItems(updated);
   };
 
   const finalizeQty = (index) => {
     const updated = [...invoiceItems];
-    const finalQty = Math.max(1, parseInt(updated[index].qtyStr) || 1);
+    const finalQty = Math.max(0.001, parseFloat(updated[index].qtyStr) || 1);
     updated[index] = { ...updated[index], qty: finalQty, qtyStr: String(finalQty) };
     setInvoiceItems(updated);
   };
@@ -741,7 +796,7 @@ export default function Billing() {
   const partyStateCode = getStateCode(selectedPartyObj?.gstin);
   const companyStateCode = getStateCode(companyGstin);
   const isInterState = !!(partyStateCode && companyStateCode && partyStateCode !== companyStateCode);
-  const taxType = isInterState ? 'IGST' : 'CGST_SGST';
+  const taxType = selectedPartyObj?.gstType || (isInterState ? 'IGST' : 'CGST_SGST');
 
   // Core save: persists invoice + updates stock. Returns saved data for printing.
   const handleSaveInvoice = async () => {
@@ -751,8 +806,8 @@ export default function Billing() {
 
     // Validate all line item quantities are ≥ 1
     for (const item of invoiceItems) {
-      if (!item.qty || item.qty < 1) {
-        toast(`Qty for "${item.name}" must be at least 1`, 'warning'); return;
+      if (!item.qty || item.qty <= 0) {
+        toast(`Qty for "${item.name}" must be greater than 0`, 'warning'); return;
       }
     }
 
@@ -789,8 +844,8 @@ export default function Billing() {
       const freshCompanyGstin = company?.gstin || '';
       const freshCompanyState = getStateCode(freshCompanyGstin);
       const freshPartyState = getStateCode(party.gstin);
-      const finalTaxType = (freshCompanyState && freshPartyState && freshCompanyState !== freshPartyState)
-        ? 'IGST' : 'CGST_SGST';
+      const finalTaxType = party.gstType || ((freshCompanyState && freshPartyState && freshCompanyState !== freshPartyState)
+        ? 'IGST' : 'CGST_SGST');
 
       const lineItems = invoiceItems.map(item => ({
         variantId: item.id,
@@ -837,6 +892,11 @@ export default function Billing() {
         notes: notes.trim() || null,
         terms: terms.trim() || null,
         theme: invoiceTheme || defaultTheme,
+        shipToName: shipToSame ? null : (shipToName.trim() || null),
+        shipToAddress: shipToSame ? null : (shipToAddress.trim() || null),
+        shipToGstin: shipToSame ? null : (shipToGstin.trim() || null),
+        billingPeriodFrom: billingPeriodFrom || null,
+        billingPeriodTo: billingPeriodTo || null,
       };
 
       // Draft/Cancelled invoices are not real sales — no stock movement, no purchase
@@ -958,6 +1018,11 @@ export default function Billing() {
       setPaymentStatus('Pending');
       setDraftId(null);
       setPayments([]);
+      if (prefillOrderId) {
+        try { await updateOrder(prefillOrderId, { status: 'Delivered', linkedInvoiceId: inv.id }); } catch { /* non-fatal */ }
+        setPrefillOrderId(null);
+        qc.invalidateQueries({ queryKey: [QK.orders] });
+      }
       toast(`Invoice ${invoiceNumber} saved. Use the Print buttons below to generate your bill.`, 'success');
       for (const k of [QK.invoices, QK.invoiceItems, QK.variants, QK.products, QK.purchases, QK.batches, QK.transactions, QK.stockLedger]) {
         qc.invalidateQueries({ queryKey: [k] });
@@ -998,6 +1063,11 @@ export default function Billing() {
       status: paymentStatus,
       notes: notes.trim() || null,
       terms: terms.trim() || null,
+      shipToName: shipToSame ? null : (shipToName.trim() || null),
+      shipToAddress: shipToSame ? null : (shipToAddress.trim() || null),
+      shipToGstin: shipToSame ? null : (shipToGstin.trim() || null),
+      billingPeriodFrom: billingPeriodFrom || null,
+      billingPeriodTo: billingPeriodTo || null,
       lineItems,
     };
     return { invoice, lineItems };
@@ -1157,6 +1227,12 @@ export default function Billing() {
     setPaymentStatus('Pending');
     setDraftId(inv.id);
     setPayments(inv.payments || []);
+    setShipToSame(!inv.shipToName && !inv.shipToAddress);
+    setShipToName(inv.shipToName || '');
+    setShipToAddress(inv.shipToAddress || '');
+    setShipToGstin(inv.shipToGstin || '');
+    setBillingPeriodFrom(inv.billingPeriodFrom || '');
+    setBillingPeriodTo(inv.billingPeriodTo || '');
     setSavedInvoice(null);
     setTab('new');
     toast('Draft loaded in a new tab — review and save to finalise', 'info');
@@ -1640,6 +1716,40 @@ export default function Billing() {
                 </div>
               </div>
 
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Billing Period From (optional)</label>
+                  <input type="date" className="form-input" value={billingPeriodFrom} onChange={e => setBillingPeriodFrom(e.target.value)} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Billing Period To (optional)</label>
+                  <input type="date" className="form-input" value={billingPeriodTo} onChange={e => setBillingPeriodTo(e.target.value)} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', marginBottom: shipToSame ? 0 : '0.75rem' }}>
+                  <input type="checkbox" checked={shipToSame} onChange={e => setShipToSame(e.target.checked)} />
+                  Ship-to address same as billing address
+                </label>
+                {!shipToSame && (
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <div className="form-group" style={{ flex: 1, minWidth: 180, marginBottom: 0 }}>
+                      <label className="form-label">Ship-To Name</label>
+                      <input type="text" className="form-input" value={shipToName} onChange={e => setShipToName(e.target.value)} placeholder="Consignee name" />
+                    </div>
+                    <div className="form-group" style={{ flex: 2, minWidth: 220, marginBottom: 0 }}>
+                      <label className="form-label">Ship-To Address / Place of Supply</label>
+                      <input type="text" className="form-input" value={shipToAddress} onChange={e => setShipToAddress(e.target.value)} placeholder="Delivery address, state" />
+                    </div>
+                    <div className="form-group" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
+                      <label className="form-label">Ship-To GSTIN (optional)</label>
+                      <input type="text" className="form-input" value={shipToGstin} onChange={e => setShipToGstin(e.target.value.toUpperCase())} maxLength={15} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                 <div className="form-group" style={{ flex: 1, minWidth: 200, marginBottom: 0, position: 'relative' }}>
                   <label className="form-label">Product</label>
@@ -1741,11 +1851,11 @@ export default function Billing() {
                   <label className="form-label">Qty</label>
                   <input
                     type="text"
-                    inputMode="numeric"
+                    inputMode="decimal"
                     className="form-input"
                     value={quantityStr}
-                    onChange={e => setQuantityStr(e.target.value.replace(/[^0-9]/g, ''))}
-                    onBlur={() => setQuantityStr(String(Math.max(1, parseInt(quantityStr) || 1)))}
+                    onChange={e => setQuantityStr(e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1'))}
+                    onBlur={() => setQuantityStr(String(Math.max(0.001, parseFloat(quantityStr) || 1)))}
                     placeholder="1"
                   />
                 </div>
@@ -1782,7 +1892,7 @@ export default function Billing() {
                           <td>
                             <input
                               type="text"
-                              inputMode="numeric"
+                              inputMode="decimal"
                               value={item.qtyStr !== undefined ? item.qtyStr : String(item.qty)}
                               onChange={e => updateQtyStr(index, e.target.value)}
                               onBlur={() => finalizeQty(index)}
@@ -1873,8 +1983,9 @@ export default function Billing() {
               {/* Tax type indicator */}
               {selectedParty && (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <span className={`badge ${isInterState ? 'badge-warning' : 'badge-primary'}`} style={{ fontSize: '0.75rem' }}>
-                    {isInterState ? 'IGST — Inter-state' : 'CGST + SGST — Intra-state'}
+                  <span className={`badge ${taxType === 'IGST' ? 'badge-warning' : 'badge-primary'}`} style={{ fontSize: '0.75rem' }}>
+                    {taxType === 'IGST' ? 'IGST — Inter-state' : 'CGST + SGST — Intra-state'}
+                    {selectedPartyObj?.gstType ? ' (manual)' : ''}
                   </span>
                 </div>
               )}
@@ -2299,6 +2410,19 @@ export default function Billing() {
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Due Date</div>
                   <div style={{ fontWeight: 600, color: isOverdue(viewInvoice) ? 'var(--danger)' : 'var(--text-main)' }}>{fmtDate(viewInvoice.dueDate)}</div>
+                </div>
+              )}
+              {viewInvoice.billingPeriodFrom && viewInvoice.billingPeriodTo && (
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Billing Period</div>
+                  <div style={{ fontWeight: 600 }}>{fmtDate(viewInvoice.billingPeriodFrom)} to {fmtDate(viewInvoice.billingPeriodTo)}</div>
+                </div>
+              )}
+              {(viewInvoice.shipToName || viewInvoice.shipToAddress) && (
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Ship To</div>
+                  <div style={{ fontWeight: 600 }}>{viewInvoice.shipToName}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{viewInvoice.shipToAddress}</div>
                 </div>
               )}
               <div>

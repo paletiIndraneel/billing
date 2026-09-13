@@ -16,6 +16,11 @@ const FACTORS = {
   LTR: 1_000,
   L:   1_000,
   ML:  1,
+  // ── Length ────────────────────────────────────────────────
+  MTR: 100,
+  CM:  1,
+  // ── Energy ────────────────────────────────────────────────
+  KWH: 1,
   // ── Count ─────────────────────────────────────────────────
   DOZEN:  12,
   DOZ:    12,
@@ -36,6 +41,8 @@ const FACTORS = {
 const DIMENSIONS = {
   TON: 'mass', KG: 'mass', G: 'mass', GM: 'mass',
   LTR: 'volume', L: 'volume', ML: 'volume',
+  MTR: 'length', CM: 'length',
+  KWH: 'energy',
   DOZEN: 'count', DOZ: 'count', GROSS: 'count', PAIR: 'count',
   SET: 'count', BOX: 'count', PACK: 'count', PKT: 'count',
   BAG: 'count', BUNDLE: 'count', ROLL: 'count', NOS: 'count',
@@ -76,6 +83,9 @@ export const UNIT_OPTIONS = [
   { value: 'TON',    label: 'TON – Metric Tonne',   dim: 'mass'   },
   { value: 'LTR',    label: 'LTR – Litre',          dim: 'volume' },
   { value: 'ML',     label: 'ML – Millilitre',      dim: 'volume' },
+  { value: 'MTR',    label: 'MTR – Metre',          dim: 'length' },
+  { value: 'CM',     label: 'CM – Centimetre',      dim: 'length' },
+  { value: 'KWH',    label: 'kWh – Kilowatt-hour',  dim: 'energy' },
   { value: 'PCS',    label: 'PCS – Pieces',         dim: 'count'  },
   { value: 'NOS',    label: 'NOS – Numbers',        dim: 'count'  },
   { value: 'DOZEN',  label: 'DOZEN – 12 pcs',       dim: 'count'  },

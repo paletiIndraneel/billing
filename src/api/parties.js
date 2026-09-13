@@ -15,6 +15,7 @@ export const fromRow = (r) => r && ({
   creditLimit: r.credit_limit,
   creditDays: r.credit_days,
   activities: r.activities ?? [],
+  gstType: r.gst_type,
   createdAt: r.created_at,
 });
 
@@ -30,6 +31,7 @@ export const toRow = (d) => {
   if ('creditLimit' in d) out.credit_limit = d.creditLimit ?? null;
   if ('creditDays' in d) out.credit_days = d.creditDays ?? null;
   if ('activities' in d) out.activities = d.activities ?? [];
+  if ('gstType' in d) out.gst_type = d.gstType || null;
   return out;
 };
 

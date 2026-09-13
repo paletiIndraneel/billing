@@ -8,7 +8,7 @@ import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import { validateGSTIN, validatePhone, validateEmail, isDummyPhone, normalizePhone, normalizeGSTIN } from '../utils/validators';
 
-const EMPTY_PARTY = { name: '', gstin: '', phone: '', address: '', type: 'Customer', email: '', activities: [] };
+const EMPTY_PARTY = { name: '', gstin: '', phone: '', address: '', type: 'Customer', email: '', activities: [], gstType: '' };
 
 export default function CRM() {
   const navigate = useNavigate();
@@ -254,6 +254,14 @@ export default function CRM() {
                 <label className="form-label">GSTIN</label>
                 <input type="text" className="form-input" value={partyModal.data.gstin}
                   onChange={e => set('gstin', e.target.value.toUpperCase())} placeholder="22AAAAA0000A1Z5" maxLength={15} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">GST Type</label>
+                <select className="form-input" value={partyModal.data.gstType || ''} onChange={e => set('gstType', e.target.value)}>
+                  <option value="">Auto-detect (from GSTIN state)</option>
+                  <option value="IGST">IGST</option>
+                  <option value="CGST_SGST">CGST + SGST</option>
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Phone</label>

@@ -4,7 +4,8 @@ export const TABLES = {
   parties: 'parties', products: 'products', product_variants: 'variants',
   invoices: 'invoices', invoice_items: 'invoiceItems', transactions: 'transactions',
   expenses: 'expenses', purchases: 'purchases', stock_ledger: 'stockLedger',
-  batches: 'batches', leads: 'leads',
+  batches: 'batches', leads: 'leads', price_history: 'priceHistory',
+  orders: 'orders', order_items: 'orderItems',
 };
 
 // canonical query keys — pages MUST key useTable/useEntity on one of these.

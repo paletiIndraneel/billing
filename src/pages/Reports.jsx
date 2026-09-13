@@ -140,6 +140,9 @@ export default function Reports() {
   const totalPurchaseReturnsGST = filteredPurchaseReturns.reduce((s, i) => s + (i.taxAmount || 0), 0);
 
   const totalExpenses = filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const recurringExpenses = filteredExpenses
+    .filter(e => ['Weekly', 'Monthly', 'Quarterly', 'Yearly'].includes(e.frequency))
+    .reduce((s, e) => s + (e.amount || 0), 0);
 
   const netRevenue = totalRevenue - totalSalesReturns;
   const netGSTCollected = totalGSTCollected - totalSalesReturnsGST;
@@ -732,7 +735,7 @@ export default function Reports() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
             <StatCard label="Total Revenue" value={fmtINR0(netRevenue)} sub={`Gross: ${fmtINR0(totalRevenue)} | Returns: -${fmtINR0(totalSalesReturns)}`} color="var(--primary)" icon={TrendingUp} />
             <StatCard label="Total Purchases" value={fmtINR0(netPurchases)} sub={`Gross: ${fmtINR0(totalPurchases)} | Returns: -${fmtINR0(totalPurchaseReturns)}`} color="var(--warning)" icon={TrendingDown} />
-            <StatCard label="Total Expenses" value={fmtINR0(totalExpenses)} sub={`${filteredExpenses.length} records`} color="var(--danger)" icon={TrendingDown} />
+            <StatCard label="Total Expenses" value={fmtINR0(totalExpenses)} sub={`${filteredExpenses.length} records · Recurring: ${fmtINR0(recurringExpenses)}`} color="var(--danger)" icon={TrendingDown} />
             <StatCard label="Gross Profit" value={fmtINR0(grossProfit)} sub={netRevenue > 0 ? `${((grossProfit / netRevenue) * 100).toFixed(1)}% margin` : '—'} color={grossProfit >= 0 ? 'var(--success)' : 'var(--danger)'} icon={TrendingUp} />
             <StatCard label="Net Profit" value={fmtINR0(netProfit)} sub={netRevenue > 0 ? `${((netProfit / netRevenue) * 100).toFixed(1)}% margin` : '—'} color={netProfit >= 0 ? 'var(--success)' : 'var(--danger)'} icon={IndianRupee} />
             <StatCard label="GST Collected (Net)" value={fmtINR0(netGSTCollected)} sub={`Gross: ${fmtINR0(totalGSTCollected)}`} color="#8B5CF6" icon={FileText} />

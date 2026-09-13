@@ -9,14 +9,14 @@ import { listActiveBatches } from '../api/batches';
 import { createPurchase, listPurchasesByVariant } from '../api/purchases';
 import { createTransaction } from '../api/transactions';
 import { listLedgerByVariant } from '../api/stockLedger';
+import { listPriceHistoryByVariant, createPriceHistoryEntry } from '../api/priceHistory';
 import { adjustStock, packageStock } from '../services/stockService';
 import { convertUnit } from '../utils/unitConversion';
-import { Plus, Edit2, Trash2, Search, TrendingDown, History, ShoppingCart, BookOpen, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, TrendingDown, History, ShoppingCart, BookOpen, Package, IndianRupee } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 
-const UNITS = ['PCS', 'KG', 'GM', 'LTR', 'ML', 'MTR', 'CM', 'BOX', 'PKT', 'SET', 'NOS', 'PAIR', 'ROLL', 'BAG', 'BUNDLE'];
-const GST_RATES = [0, 5, 12, 18, 28];
+const UNITS = ['PCS', 'KG', 'GM', 'LTR', 'ML', 'MTR', 'CM', 'KWH', 'BOX', 'PKT', 'SET', 'NOS', 'PAIR', 'ROLL', 'BAG', 'BUNDLE'];
 
 const EMPTY_FORM = {
   productName: '',
@@ -72,6 +72,7 @@ export default function Inventory() {
   const [outModal, setOutModal] = useState(null);
   const [historyVariantId, setHistoryVariantId] = useState(null);
   const [ledgerVariantId, setLedgerVariantId] = useState(null);
+  const [priceHistoryVariantId, setPriceHistoryVariantId] = useState(null);
   const [packagingModal, setPackagingModal] = useState(null);
   // packagingModal = { product, variants: [...], items: [{ variant, qtyStr }], note }
 
@@ -175,6 +176,7 @@ export default function Inventory() {
     } else {
       const { variantId, productId } = editModal;
       try {
+        const original = variants.find(v => v.id === variantId);
         await updateVariant(variantId, {
           packSize: packSizeNum,
           unit: data.unit,
@@ -184,6 +186,9 @@ export default function Inventory() {
           reorderPoint: Number(data.reorderPoint) || 10,
           barcode: data.barcode?.trim() || '',
         });
+        if (original && Number(original.sellingPrice) !== sellingPrice) {
+          await createPriceHistoryEntry({ variantId, oldPrice: original.sellingPrice, newPrice: sellingPrice });
+        }
         if (productId) await updateProduct(productId, { name: data.productName.trim(), hsn: data.hsn || '' });
         toast('Updated', 'success');
         setEditModal(null);
@@ -192,6 +197,7 @@ export default function Inventory() {
     qc.invalidateQueries({ queryKey: [QK.products] });
     qc.invalidateQueries({ queryKey: [QK.variants] });
     qc.invalidateQueries({ queryKey: [QK.stockLedger] });
+    qc.invalidateQueries({ queryKey: [QK.priceHistory] });
   };
 
   const deleteVariant = async () => {
@@ -306,6 +312,12 @@ export default function Inventory() {
   const ledgerEntries = useTable(
     [QK.stockLedger, ledgerVariantId],
     () => ledgerVariantId ? listLedgerByVariant(ledgerVariantId) : Promise.resolve([]),
+  );
+
+  const priceHistoryVariant = variantsWithProduct.find(v => v.id === priceHistoryVariantId);
+  const priceHistoryEntries = useTable(
+    [QK.priceHistory, priceHistoryVariantId],
+    () => priceHistoryVariantId ? listPriceHistoryByVariant(priceHistoryVariantId) : Promise.resolve([]),
   );
 
   return (
@@ -492,6 +504,10 @@ export default function Inventory() {
                           onClick={() => setHistoryVariantId(v.id)}>
                           <History size={13} />
                         </button>
+                        <button className="btn btn-secondary" style={{ padding: '0.375rem 0.5rem' }} title="Price History"
+                          onClick={() => setPriceHistoryVariantId(v.id)}>
+                          <IndianRupee size={13} />
+                        </button>
                         <button className="btn btn-secondary" style={{ padding: '0.375rem 0.5rem' }} title="Edit"
                           onClick={() => setEditModal({
                             mode: 'edit',
@@ -660,10 +676,8 @@ export default function Inventory() {
                 <input required type="number" min="0.01" step="0.01" className="form-input" value={editModal.data.sellingPrice} onChange={e => setField('sellingPrice', e.target.value)} placeholder="0.00" autoFocus={editModal.mode === 'edit'} />
               </div>
               <div className="form-group">
-                <label className="form-label">GST Rate</label>
-                <select className="form-input" value={editModal.data.gstRate} onChange={e => setField('gstRate', e.target.value)}>
-                  {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
-                </select>
+                <label className="form-label">GST Rate (%)</label>
+                <input type="number" min="0" max="100" step="0.01" className="form-input" value={editModal.data.gstRate} onChange={e => setField('gstRate', e.target.value)} placeholder="e.g. 18" />
               </div>
               <div className="form-group">
                 <label className="form-label">Reorder Point (Packs)</label>
@@ -1062,6 +1076,58 @@ export default function Inventory() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button className="btn btn-secondary" onClick={() => setLedgerVariantId(null)}>Close</button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {/* Price History Modal */}
+      {priceHistoryVariantId && priceHistoryVariant && (
+        <Modal title={`Price History — ${priceHistoryVariant.productName} (${ps(priceHistoryVariant)} ${priceHistoryVariant.unit} Pack)`} onClose={() => setPriceHistoryVariantId(null)} size="md">
+          {!priceHistoryEntries || priceHistoryEntries.length === 0 ? (
+            <div>
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                No price changes recorded yet.
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setPriceHistoryVariantId(null)}>Close</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="table-container" style={{ marginBottom: '1rem' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Old Price</th>
+                      <th>New Price</th>
+                      <th>Change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {priceHistoryEntries.map(p => {
+                      const delta = (p.newPrice || 0) - (p.oldPrice || 0);
+                      const pct = p.oldPrice > 0 ? (delta / p.oldPrice) * 100 : null;
+                      const up = delta > 0;
+                      return (
+                        <tr key={p.id}>
+                          <td style={{ whiteSpace: 'nowrap' }}>{new Date(p.changedAt).toLocaleDateString('en-IN')}</td>
+                          <td style={{ color: 'var(--text-muted)' }}>₹{(p.oldPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ fontWeight: 600 }}>₹{(p.newPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ fontWeight: 600, color: up ? 'var(--success)' : 'var(--danger)' }}>
+                            {up ? '+' : ''}₹{delta.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {pct !== null && ` (${up ? '+' : ''}${pct.toFixed(1)}%)`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setPriceHistoryVariantId(null)}>Close</button>
               </div>
             </>
           )}

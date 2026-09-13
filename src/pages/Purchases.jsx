@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { updateOrder } from '../api/orders';
 import { useTable } from '../api/useTable';
 import { QK } from '../api/realtime';
 import { getCompany, nextInvoiceNumber } from '../api/company';
@@ -148,6 +150,9 @@ const STATUS_OPTIONS = ['Pending', 'Received', 'Cancelled'];
 const PAGE_SIZE = 50;
 
 export default function Purchases() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [prefillOrderId, setPrefillOrderId] = useState(null);
   const parties = useTable(QK.parties, listParties);
   const vendors = useMemo(() => parties.filter(p => p.type === 'Vendor'), [parties]);
   const products = useTable(QK.products, listProducts);
@@ -201,6 +206,21 @@ export default function Purchases() {
   useEffect(() => {
     getCompany().then(c => setCompanyGstin(c?.gstin || ''));
   }, []);
+
+  // Prefill from an Order (Orders & Shipment page → "Convert to Purchase Bill").
+  useEffect(() => {
+    const prefill = location.state?.prefillOrder;
+    if (!prefill || !variantsForPurchase.length) return;
+    setSelectedVendor(prefill.partyId || '');
+    setItems(prefill.items.map(item => {
+      const v = variantsForPurchase.find(x => x.variantId === item.variantId);
+      if (!v) return null;
+      const rate = item.rate ?? v.purchasePrice ?? 0;
+      return { ...v, rate, rateStr: String(rate), qty: item.qty, qtyStr: String(item.qty), itemDiscountPct: 0, discStr: '0' };
+    }).filter(Boolean));
+    setPrefillOrderId(prefill.orderId);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, variantsForPurchase]);
 
   const saveVendor = async (e) => {
     e.preventDefault();
@@ -367,8 +387,8 @@ export default function Purchases() {
     const company = await getCompany() ?? {};
     const freshCompanyState = getStateCode(company?.gstin || '');
     const freshVendorState = getStateCode(vendorObj.gstin);
-    const finalTaxType = (freshCompanyState && freshVendorState && freshCompanyState !== freshVendorState)
-      ? 'IGST' : 'CGST_SGST';
+    const finalTaxType = vendorObj.gstType || ((freshCompanyState && freshVendorState && freshCompanyState !== freshVendorState)
+      ? 'IGST' : 'CGST_SGST');
 
     let poNumber;
     try {
@@ -454,6 +474,11 @@ export default function Purchases() {
     }
 
     setItems([]); setSelectedVendor(''); setNotes(''); setPaymentMethod('Bank Transfer');
+    if (prefillOrderId) {
+      try { await updateOrder(prefillOrderId, { status: 'Delivered', linkedInvoiceId: saved.id }); } catch { /* non-fatal */ }
+      setPrefillOrderId(null);
+      qc.invalidateQueries({ queryKey: [QK.orders] });
+    }
     toast(`Purchase ${poNumber} saved! Stock updated.`, 'success');
     setSaving(false);
   };

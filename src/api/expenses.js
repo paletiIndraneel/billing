@@ -11,6 +11,7 @@ export const fromRow = (r) => r && ({
   paymentMethod: r.payment_method,
   vendorName: r.vendor_name,
   description: r.description,
+  frequency: r.frequency,
   createdAt: r.created_at,
 });
 
@@ -22,6 +23,7 @@ export const toRow = (d) => {
   if ('paymentMethod' in d) out.payment_method = d.paymentMethod || null;
   if ('vendorName' in d) out.vendor_name = d.vendorName || null;
   if ('description' in d) out.description = d.description || null;
+  if ('frequency' in d) out.frequency = d.frequency || 'One-time';
   return out;
 };
 

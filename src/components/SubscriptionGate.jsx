@@ -15,7 +15,7 @@ function SubscriptionBanner({ sub, access, onRefresh }) {
   if (access === 'active') return null;
 
   const bannerStyle = {
-    position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+    position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 900,
     padding: '0.5rem 1.5rem',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
     fontSize: '0.8rem', fontWeight: 500,

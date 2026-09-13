@@ -6,6 +6,7 @@ import { listProducts } from '../api/products';
 import { listVariants } from '../api/variants';
 import { listParties } from '../api/parties';
 import { listExpenses } from '../api/expenses';
+import { listRecentPriceHistory } from '../api/priceHistory';
 import { IndianRupee, FileText, Package, AlertTriangle, TrendingUp, TrendingDown, Bell, Clock, ShoppingCart } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
@@ -72,7 +73,7 @@ function TrendChart({ data }) {
   const GG = n > 20 ? 6 : 14;
   const totalW = n * (2 * BW + GAP + GG) + 10;
   return (
-    <svg width="100%" viewBox={`0 0 ${totalW} ${H + 30}`} style={{ overflow: 'visible', display: 'block' }}>
+    <svg width="100%" height={H + 30} viewBox={`0 0 ${totalW} ${H + 30}`} preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible', display: 'block', maxHeight: H + 30 }}>
       <line x1={0} y1={H} x2={totalW} y2={H} stroke="var(--border)" strokeWidth={1} />
       {data.map((d, i) => {
         const gx = 5 + i * (2 * BW + GAP + GG);
@@ -103,6 +104,7 @@ export default function Dashboard() {
   const invoices        = useTable(QK.invoices, listInvoices);   // listInvoices orders date desc
   const products        = useTable(QK.products, listProducts);
   const productVariants = useTable(QK.variants, listVariants);
+  const recentPriceChanges = useTable([QK.priceHistory], () => listRecentPriceHistory(5));
   const parties         = useTable(QK.parties, listParties);
   const expenses        = useTable(QK.expenses, listExpenses);
   const toast           = useToast();
@@ -360,6 +362,28 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* ── Recent Price Changes ── */}
+      {recentPriceChanges.length > 0 && (
+        <div className="card" style={{ marginTop: '1.5rem', marginBottom: 0 }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.875rem' }}>Recent Price Changes</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {recentPriceChanges.map(p => {
+              const v = variantsWithName.find(x => x.id === p.variantId);
+              const up = (p.newPrice || 0) >= (p.oldPrice || 0);
+              return (
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderRadius: 6, background: 'var(--bg-subtle, rgba(0,0,0,0.02))', fontSize: '0.85rem' }}>
+                  <span>{v?.productName || 'Unknown product'}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {fmtINR(p.oldPrice)} → <strong style={{ color: up ? 'var(--success)' : 'var(--danger)' }}>{fmtINR(p.newPrice)}</strong>
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>{fmtDate(p.changedAt)}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Overdue Reminders ── */}
       {overdueInvoices.length > 0 && (
