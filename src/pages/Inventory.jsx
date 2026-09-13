@@ -524,7 +524,7 @@ export default function Inventory() {
                             productId: v.productId,
                             data: {
                               productName: v.productName,
-                              hsn: v.hsn,
+                              hsn: v.hsn || '',
                               baseUnit: v.baseUnit || '',
                               packSize: v.packSize || 1,
                               unit: v.unit,

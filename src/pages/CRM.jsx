@@ -64,7 +64,7 @@ export default function CRM() {
       });
 
       if (duplicate) {
-        const field = normalizeGSTIN(duplicate.gstin) === gstinNorm ? 'GSTIN' : 'phone number';
+        const field = (gstinNorm && normalizeGSTIN(duplicate.gstin) === gstinNorm) ? 'GSTIN' : 'phone number';
         const proceed = window.confirm(
           `A contact "${duplicate.name}" already exists with the same ${field}.\n\nThis may be a duplicate entry. Save anyway?`
         );
