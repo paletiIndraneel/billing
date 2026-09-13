@@ -184,17 +184,22 @@ async function buildPDF(invoice, party, lineItems, company, themeKey = 'classic'
   if (party.address) { doc.text(party.address, L, by); by += 4.5; }
   if (party.phone) { doc.text(`Phone: ${party.phone}`, L, by); by += 4.5; }
 
-  if (invoice.shipToName || invoice.shipToAddress) {
+  // Ship-to defaults to the billing party's own details when no separate
+  // consignee was entered, so the invoice always carries a place-of-supply block.
+  const shipName = invoice.shipToName || party.name;
+  const shipAddress = invoice.shipToAddress || party.address;
+  const shipGstin = invoice.shipToGstin || party.gstin;
+  if (shipName || shipAddress) {
     let shipY = sepY + 6;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
     doc.text('SHIP TO', mx, shipY);
     shipY += 4.5;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30);
-    if (invoice.shipToName) { doc.text(invoice.shipToName, mx, shipY); shipY += 4.5; }
+    if (shipName) { doc.text(shipName, mx, shipY); shipY += 4.5; }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(80, 80, 80);
-    if (invoice.shipToGstin) { doc.text(`GSTIN: ${invoice.shipToGstin}`, mx, shipY); shipY += 4.5; }
-    if (invoice.shipToAddress) {
-      const shipLines = doc.splitTextToSize(invoice.shipToAddress, 70);
+    if (shipGstin) { doc.text(`GSTIN: ${shipGstin}`, mx, shipY); shipY += 4.5; }
+    if (shipAddress) {
+      const shipLines = doc.splitTextToSize(shipAddress, 70);
       shipLines.forEach(line => { doc.text(line, mx, shipY); shipY += 4.5; });
     }
     by = Math.max(by, shipY);
@@ -548,6 +553,7 @@ export default function Billing() {
   const [shipToName, setShipToName] = useState('');
   const [shipToAddress, setShipToAddress] = useState('');
   const [shipToGstin, setShipToGstin] = useState('');
+  const [taxTypeOverride, setTaxTypeOverride] = useState(''); // '' = auto-detect; 'IGST' | 'CGST_SGST' = manual override for this invoice
   const [billingPeriodFrom, setBillingPeriodFrom] = useState('');
   const [billingPeriodTo, setBillingPeriodTo] = useState('');
 
@@ -618,6 +624,7 @@ export default function Billing() {
       shipping, discountPct, dueDate, notes, terms,
       invoiceTheme, paymentStatus, savedInvoice, draftId, payments,
       shipToSame, shipToName, shipToAddress, shipToGstin, billingPeriodFrom, billingPeriodTo,
+      taxTypeOverride,
     };
   }
 
@@ -645,6 +652,7 @@ export default function Billing() {
     setShipToGstin(snap.shipToGstin || '');
     setBillingPeriodFrom(snap.billingPeriodFrom || '');
     setBillingPeriodTo(snap.billingPeriodTo || '');
+    setTaxTypeOverride(snap.taxTypeOverride || '');
   }
 
   function resetCurrentBill() {
@@ -656,6 +664,7 @@ export default function Billing() {
     setSavedInvoice(null); setDraftId(null); setPayments([]);
     setShipToSame(true); setShipToName(''); setShipToAddress(''); setShipToGstin('');
     setBillingPeriodFrom(''); setBillingPeriodTo('');
+    setTaxTypeOverride('');
   }
 
   function addBillTab() {
@@ -798,7 +807,7 @@ export default function Billing() {
   const partyStateCode = getStateCode(selectedPartyObj?.gstin);
   const companyStateCode = getStateCode(companyGstin);
   const isInterState = !!(partyStateCode && companyStateCode && partyStateCode !== companyStateCode);
-  const taxType = selectedPartyObj?.gstType || (isInterState ? 'IGST' : 'CGST_SGST');
+  const taxType = taxTypeOverride || selectedPartyObj?.gstType || (isInterState ? 'IGST' : 'CGST_SGST');
 
   // Core save: persists invoice + updates stock. Returns saved data for printing.
   const handleSaveInvoice = async () => {
@@ -846,7 +855,7 @@ export default function Billing() {
       const freshCompanyGstin = company?.gstin || '';
       const freshCompanyState = getStateCode(freshCompanyGstin);
       const freshPartyState = getStateCode(party.gstin);
-      const finalTaxType = party.gstType || ((freshCompanyState && freshPartyState && freshCompanyState !== freshPartyState)
+      const finalTaxType = taxTypeOverride || party.gstType || ((freshCompanyState && freshPartyState && freshCompanyState !== freshPartyState)
         ? 'IGST' : 'CGST_SGST');
 
       const lineItems = invoiceItems.map(item => ({
@@ -1235,6 +1244,7 @@ export default function Billing() {
     setShipToGstin(inv.shipToGstin || '');
     setBillingPeriodFrom(inv.billingPeriodFrom || '');
     setBillingPeriodTo(inv.billingPeriodTo || '');
+    setTaxTypeOverride(inv.taxType || '');
     setSavedInvoice(null);
     setTab('new');
     toast('Draft loaded in a new tab — review and save to finalise', 'info');
@@ -1729,6 +1739,17 @@ export default function Billing() {
                 </div>
               </div>
 
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ marginBottom: 0, minWidth: 220 }}>
+                  <label className="form-label">Tax Type</label>
+                  <select className="form-input" value={taxTypeOverride} onChange={e => setTaxTypeOverride(e.target.value)}>
+                    <option value="">Auto-detect ({isInterState ? 'IGST' : 'CGST + SGST'})</option>
+                    <option value="IGST">IGST (Inter-state)</option>
+                    <option value="CGST_SGST">GST — CGST + SGST (Intra-state)</option>
+                  </select>
+                </div>
+              </div>
+
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', marginBottom: shipToSame ? 0 : '0.75rem' }}>
                   <input type="checkbox" checked={shipToSame} onChange={e => setShipToSame(e.target.checked)} />
@@ -1987,7 +2008,7 @@ export default function Billing() {
                 <div style={{ marginBottom: '0.75rem' }}>
                   <span className={`badge ${taxType === 'IGST' ? 'badge-warning' : 'badge-primary'}`} style={{ fontSize: '0.75rem' }}>
                     {taxType === 'IGST' ? 'IGST — Inter-state' : 'CGST + SGST — Intra-state'}
-                    {selectedPartyObj?.gstType ? ' (manual)' : ''}
+                    {(taxTypeOverride || selectedPartyObj?.gstType) ? ' (manual)' : ''}
                   </span>
                 </div>
               )}
