@@ -1822,7 +1822,7 @@ export default function Billing() {
                         const filtered = variantsForBilling?.filter(v =>
                           !productSearch ||
                           v.productName.toLowerCase().includes(productSearch.toLowerCase()) ||
-                          (v.packSize && v.packSize.toLowerCase().includes(productSearch.toLowerCase())) ||
+                          (v.packSize && String(v.packSize).toLowerCase().includes(productSearch.toLowerCase())) ||
                           (v.hsn && v.hsn.includes(productSearch))
                         ) || [];
                         if (filtered.length === 0) return (

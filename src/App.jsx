@@ -71,6 +71,7 @@ function useTheme() {
 function AppLayout({ user, onLogout }) {
   const [theme, toggleTheme] = useTheme();
   const [navOpen, setNavOpen] = useState(false);
+  const { pathname } = useLocation();
 
   return (
     <div className="app-container">
@@ -126,17 +127,17 @@ function AppLayout({ user, onLogout }) {
 
         <div className="content-area">
           <Routes>
-            <Route path="/" element={<ErrorBoundary label="Dashboard"><Dashboard /></ErrorBoundary>} />
-            <Route path="/crm" element={<ErrorBoundary label="Customers & Vendors"><CRM /></ErrorBoundary>} />
-            <Route path="/billing" element={<ErrorBoundary label="GST Billing"><Billing /></ErrorBoundary>} />
-            <Route path="/payments" element={<ErrorBoundary label="Payments"><Payments /></ErrorBoundary>} />
-            <Route path="/expenses" element={<ErrorBoundary label="Expenses"><Expenses /></ErrorBoundary>} />
-            <Route path="/inventory" element={<ErrorBoundary label="Inventory"><Inventory /></ErrorBoundary>} />
-            <Route path="/reports" element={<ErrorBoundary label="Reports"><Reports /></ErrorBoundary>} />
-            <Route path="/settings" element={<ErrorBoundary label="Settings"><SettingsPage /></ErrorBoundary>} />
-            <Route path="/purchases" element={<ErrorBoundary label="Purchases"><Purchases /></ErrorBoundary>} />
-            <Route path="/orders" element={<ErrorBoundary label="Orders & Shipment"><Orders /></ErrorBoundary>} />
-            <Route path="/ledger/:partyId" element={<ErrorBoundary label="Ledger"><Ledger /></ErrorBoundary>} />
+            <Route path="/" element={<ErrorBoundary key={pathname} label="Dashboard"><Dashboard /></ErrorBoundary>} />
+            <Route path="/crm" element={<ErrorBoundary key={pathname} label="Customers & Vendors"><CRM /></ErrorBoundary>} />
+            <Route path="/billing" element={<ErrorBoundary key={pathname} label="GST Billing"><Billing /></ErrorBoundary>} />
+            <Route path="/payments" element={<ErrorBoundary key={pathname} label="Payments"><Payments /></ErrorBoundary>} />
+            <Route path="/expenses" element={<ErrorBoundary key={pathname} label="Expenses"><Expenses /></ErrorBoundary>} />
+            <Route path="/inventory" element={<ErrorBoundary key={pathname} label="Inventory"><Inventory /></ErrorBoundary>} />
+            <Route path="/reports" element={<ErrorBoundary key={pathname} label="Reports"><Reports /></ErrorBoundary>} />
+            <Route path="/settings" element={<ErrorBoundary key={pathname} label="Settings"><SettingsPage /></ErrorBoundary>} />
+            <Route path="/purchases" element={<ErrorBoundary key={pathname} label="Purchases"><Purchases /></ErrorBoundary>} />
+            <Route path="/orders" element={<ErrorBoundary key={pathname} label="Orders & Shipment"><Orders /></ErrorBoundary>} />
+            <Route path="/ledger/:partyId" element={<ErrorBoundary key={pathname} label="Ledger"><Ledger /></ErrorBoundary>} />
           </Routes>
         </div>
       </main>

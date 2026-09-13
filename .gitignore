@@ -32,3 +32,6 @@ npm-debug.log*
 
 # Salesforce CLI cache
 .sf/
+
+# E2E test reports (screenshots + scratch docs, not project source)
+docs/testing/

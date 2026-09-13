@@ -634,9 +634,9 @@ export default function Reports() {
       };
 
       downloadJSON(gstr1, `GSTR1-${fp}-${companyGstin || 'export'}.json`);
-      toast.success('GSTR-1 JSON exported successfully');
+      toast('GSTR-1 JSON exported successfully', 'success');
     } catch (err) {
-      toast.error('Failed to export GSTR-1: ' + err.message);
+      toast('Failed to export GSTR-1: ' + err.message, 'error');
     }
   };
 
@@ -702,9 +702,9 @@ export default function Reports() {
       };
 
       downloadJSON(gstr3b, `GSTR3B-${retPeriod}-${companyGstin || 'export'}.json`);
-      toast.success('GSTR-3B JSON exported successfully');
+      toast('GSTR-3B JSON exported successfully', 'success');
     } catch (err) {
-      toast.error('Failed to export GSTR-3B: ' + err.message);
+      toast('Failed to export GSTR-3B: ' + err.message, 'error');
     }
   };
 

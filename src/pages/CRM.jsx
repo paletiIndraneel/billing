@@ -252,7 +252,7 @@ export default function CRM() {
               </div>
               <div className="form-group">
                 <label className="form-label">GSTIN</label>
-                <input type="text" className="form-input" value={partyModal.data.gstin}
+                <input type="text" className="form-input" value={partyModal.data.gstin || ''}
                   onChange={e => set('gstin', e.target.value.toUpperCase())} placeholder="22AAAAA0000A1Z5" maxLength={15} />
               </div>
               <div className="form-group">
@@ -265,7 +265,7 @@ export default function CRM() {
               </div>
               <div className="form-group">
                 <label className="form-label">Phone</label>
-                <input type="tel" className="form-input" value={partyModal.data.phone}
+                <input type="tel" className="form-input" value={partyModal.data.phone || ''}
                   onChange={e => set('phone', e.target.value)} placeholder="9999999999" />
               </div>
               <div className="form-group">
@@ -275,7 +275,7 @@ export default function CRM() {
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label">Address</label>
-                <textarea className="form-input" rows={2} value={partyModal.data.address}
+                <textarea className="form-input" rows={2} value={partyModal.data.address || ''}
                   onChange={e => set('address', e.target.value)} placeholder="City, State, PIN" />
               </div>
 
