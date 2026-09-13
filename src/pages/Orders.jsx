@@ -11,6 +11,7 @@ import { listVariants } from '../api/variants';
 import { Plus, Trash2, Truck, Package } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
+import { useLoading } from '../components/LoadingOverlay';
 
 const STATUSES = ['Placed', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
 
@@ -31,6 +32,7 @@ export default function Orders() {
   const qc = useQueryClient();
   const toast = useToast();
   const navigate = useNavigate();
+  const { withLoading } = useLoading();
 
   const orders = useTable(QK.orders, listOrders);
   const allOrderItems = useTable([QK.orderItems], listOrderItems);
@@ -90,44 +92,48 @@ export default function Orders() {
     const { orderType, partyId, expectedDate, notes, items } = newOrderModal;
     if (!partyId) { toast('Select a party', 'warning'); return; }
     if (items.length === 0) { toast('Add at least one item', 'warning'); return; }
-    try {
-      const orderNumber = `${orderType === 'Sales' ? 'SO' : 'PO'}-${Date.now()}`;
-      const order = await createOrder({
-        orderType, orderNumber, partyId, date: new Date().toISOString(),
-        expectedDate: expectedDate || null, status: 'Placed', notes: notes || '',
-      });
-      for (const item of items) {
-        await createOrderItem({ orderId: order.id, ...item });
+    await withLoading(async () => {
+      try {
+        const orderNumber = `${orderType === 'Sales' ? 'SO' : 'PO'}-${Date.now()}`;
+        const order = await createOrder({
+          orderType, orderNumber, partyId, date: new Date().toISOString(),
+          expectedDate: expectedDate || null, status: 'Placed', notes: notes || '',
+        });
+        for (const item of items) {
+          await createOrderItem({ orderId: order.id, ...item });
+        }
+        toast(`${orderType} order ${orderNumber} created`, 'success');
+        setNewOrderModal(null);
+      } catch (err) {
+        toast('Failed to create order: ' + err.message, 'error');
       }
-      toast(`${orderType} order ${orderNumber} created`, 'success');
-      setNewOrderModal(null);
-    } catch (err) {
-      toast('Failed to create order: ' + err.message, 'error');
-    }
-    qc.invalidateQueries({ queryKey: [QK.orders] });
-    qc.invalidateQueries({ queryKey: [QK.orderItems] });
+      qc.invalidateQueries({ queryKey: [QK.orders] });
+      qc.invalidateQueries({ queryKey: [QK.orderItems] });
+    });
   };
 
   // ── Status / shipment ───────────────────────────────────────────────────────
-  const changeStatus = async (order, status) => {
+  const changeStatus = (order, status) => withLoading(async () => {
     try {
       await updateOrder(order.id, { status });
       toast(`Status updated to ${status}`, 'success');
     } catch (err) { toast('Failed: ' + err.message, 'error'); }
     qc.invalidateQueries({ queryKey: [QK.orders] });
-  };
+  });
 
   const saveShipment = async (e) => {
     e.preventDefault();
-    try {
-      await updateOrder(shipModal.id, { carrier: shipModal.carrier, trackingNumber: shipModal.trackingNumber });
-      toast('Shipment details saved', 'success');
-      setShipModal(null);
-    } catch (err) { toast('Failed: ' + err.message, 'error'); }
-    qc.invalidateQueries({ queryKey: [QK.orders] });
+    await withLoading(async () => {
+      try {
+        await updateOrder(shipModal.id, { carrier: shipModal.carrier, trackingNumber: shipModal.trackingNumber });
+        toast('Shipment details saved', 'success');
+        setShipModal(null);
+      } catch (err) { toast('Failed: ' + err.message, 'error'); }
+      qc.invalidateQueries({ queryKey: [QK.orders] });
+    });
   };
 
-  const removeOrder = async (order) => {
+  const removeOrder = (order) => withLoading(async () => {
     try {
       await deleteItemsByOrder(order.id);
       await deleteOrder(order.id);
@@ -136,7 +142,7 @@ export default function Orders() {
     } catch (err) { toast('Failed: ' + err.message, 'error'); }
     qc.invalidateQueries({ queryKey: [QK.orders] });
     qc.invalidateQueries({ queryKey: [QK.orderItems] });
-  };
+  });
 
   // Convert: hand the order's party + items to the existing Billing/Purchases
   // form via router state, so the existing save flow (GST calc, stock movement)

@@ -7,7 +7,8 @@ import { listVariants } from '../api/variants';
 import { listParties } from '../api/parties';
 import { listExpenses } from '../api/expenses';
 import { listRecentPriceHistory } from '../api/priceHistory';
-import { IndianRupee, FileText, Package, AlertTriangle, TrendingUp, TrendingDown, Bell, Clock, ShoppingCart } from 'lucide-react';
+import { listOrders } from '../api/orders';
+import { IndianRupee, FileText, Package, AlertTriangle, TrendingUp, TrendingDown, Bell, Clock, ShoppingCart, Truck } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
 function fmtINR(n) {
@@ -91,6 +92,31 @@ function TrendChart({ data }) {
   );
 }
 
+// Live snapshot of current stock quantity per product (top N by available packs).
+function StockInventoryChart({ items }) {
+  if (!items || items.length === 0) return (
+    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+      No inventory yet
+    </div>
+  );
+  const maxQty = Math.max(...items.map(i => i.qty), 1);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+      {items.map(i => (
+        <div key={i.id}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.2rem' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name}</span>
+            <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: '0.5rem' }}>{i.qty % 1 === 0 ? i.qty : i.qty.toFixed(1)} packs</span>
+          </div>
+          <div style={{ height: 8, background: 'var(--border)', borderRadius: 4 }}>
+            <div style={{ height: '100%', width: `${Math.max(2, (i.qty / maxQty) * 100)}%`, background: i.low ? 'var(--warning)' : 'var(--primary)', borderRadius: 4, transition: 'width 0.4s' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const DATE_RANGES = [
   { key: 'today', label: 'Today' },
   { key: 'week', label: 'This Week' },
@@ -105,6 +131,7 @@ export default function Dashboard() {
   const products        = useTable(QK.products, listProducts);
   const productVariants = useTable(QK.variants, listVariants);
   const recentPriceChanges = useTable([QK.priceHistory], () => listRecentPriceHistory(5));
+  const orders = useTable(QK.orders, listOrders);
   const parties         = useTable(QK.parties, listParties);
   const expenses        = useTable(QK.expenses, listExpenses);
   const toast           = useToast();
@@ -216,6 +243,20 @@ export default function Dashboard() {
   }, [variantsWithName]);
 
   const lowStockProducts = useMemo(() => variantsWithName.filter(v => v.availablePacks <= (v.reorderPoint ?? 10)), [variantsWithName]);
+  const stockInventoryItems = useMemo(() => {
+    return [...variantsWithName]
+      .sort((a, b) => b.availablePacks - a.availablePacks)
+      .slice(0, 8)
+      .map(v => ({ id: v.id, name: v.productName || v.name, qty: v.availablePacks, low: v.availablePacks <= (v.reorderPoint ?? 10) }));
+  }, [variantsWithName]);
+  const shippingStats = useMemo(() => {
+    const list = orders || [];
+    return {
+      inTransit: list.filter(o => o.status === 'Shipped').length,
+      pendingDispatch: list.filter(o => ['Placed', 'Confirmed'].includes(o.status)).length,
+      deliveredTotal: list.filter(o => o.status === 'Delivered').length,
+    };
+  }, [orders]);
   const overdueInvoices  = useMemo(() => salesInvoices.filter(isOverdue).sort((a, b) => daysSince(b.dueDate || b.date) - daysSince(a.dueDate || a.date)), [salesInvoices]);
   const overdueAmount    = useMemo(() => overdueInvoices.reduce((s, i) => s + (i.total || 0), 0), [overdueInvoices]);
   const recentInvoices   = useMemo(() => (invoices || []).slice(0, 6), [invoices]);
@@ -336,30 +377,48 @@ export default function Dashboard() {
           </div>
           <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--warning)' }}><Package size={22} /></div>
         </div>
+
+        <div className="stat-card">
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Shipping</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.2rem' }}>{shippingStats.inTransit} in transit</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{shippingStats.pendingDispatch} pending dispatch · {shippingStats.deliveredTotal} delivered</div>
+          </div>
+          <div className="stat-icon" style={{ background: 'rgba(6,182,212,0.1)', color: '#06B6D4' }}><Truck size={22} /></div>
+        </div>
       </div>
 
-      {/* ── Monthly Trend Chart ── */}
-      <div className="card" style={{ marginTop: '1.5rem', marginBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.875rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Sales vs Purchases <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>· {rangeLabel} · {trendIsDaily ? 'Daily' : 'Monthly'}</span></h2>
-          <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--primary)', display: 'inline-block' }} /> Sales
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f59e0b', display: 'inline-block' }} /> Purchases
-            </span>
+      {/* ── Monthly Trend + Stock Inventory ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.875rem' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Sales vs Purchases <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>· {rangeLabel} · {trendIsDaily ? 'Daily' : 'Monthly'}</span></h2>
+            <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--primary)', display: 'inline-block' }} /> Sales
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f59e0b', display: 'inline-block' }} /> Purchases
+              </span>
+            </div>
+          </div>
+          <TrendChart data={trendData} />
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.625rem', paddingTop: '0.625rem', borderTop: '1px solid var(--border)', overflowX: 'auto' }}>
+            {trendData.map(m => (
+              <div key={m.key} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', minWidth: 64, flexShrink: 0 }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: 2 }}>{m.label}</div>
+                <div style={{ color: 'var(--primary)' }}>{fmtINR(m.sales)}</div>
+                <div style={{ color: '#f59e0b' }}>{fmtINR(m.purchases)}</div>
+              </div>
+            ))}
           </div>
         </div>
-        <TrendChart data={trendData} />
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.625rem', paddingTop: '0.625rem', borderTop: '1px solid var(--border)', overflowX: 'auto' }}>
-          {trendData.map(m => (
-            <div key={m.key} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', minWidth: 64, flexShrink: 0 }}>
-              <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: 2 }}>{m.label}</div>
-              <div style={{ color: 'var(--primary)' }}>{fmtINR(m.sales)}</div>
-              <div style={{ color: '#f59e0b' }}>{fmtINR(m.purchases)}</div>
-            </div>
-          ))}
+
+        <div className="card" style={{ marginBottom: 0 }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.875rem' }}>
+            Stock Inventory <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>· top {stockInventoryItems.length} by quantity</span>
+          </h2>
+          <StockInventoryChart items={stockInventoryItems} />
         </div>
       </div>
 

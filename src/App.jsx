@@ -4,6 +4,7 @@ import { resolveTheme, setTheme } from './lib/theme';
 import logo from './assets/Nexaura logo.png';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ToastProvider } from './components/Toast';
+import { LoadingProvider } from './components/LoadingOverlay';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
@@ -265,9 +266,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <Router>
-          <AuthGate />
-        </Router>
+        <LoadingProvider>
+          <Router>
+            <AuthGate />
+          </Router>
+        </LoadingProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

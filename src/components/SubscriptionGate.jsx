@@ -2,14 +2,14 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { Key, RefreshCw, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import {
   ensureTrialStarted, evaluateAccess, daysRemaining,
-  activateLicense, refreshSubscriptionStatus, PLAN_LABELS, TRIAL_DAYS, GRACE_DAYS,
+  activateLicense, refreshSubscriptionStatus, PLAN_LABELS,
 } from '../lib/subscription';
 
 // ── Context ──────────────────────────────────────────────────────────────────
 const SubscriptionCtx = createContext(null);
 export function useSubscription() { return useContext(SubscriptionCtx); }
 
-// ── Trial / Grace banner shown inside the running app ─────────────────────────
+// ── Trial banner shown inside the running app ──────────────────────────────────
 function SubscriptionBanner({ sub, access, onRefresh }) {
   const days = daysRemaining(sub);
   if (access === 'active') return null;
@@ -19,7 +19,7 @@ function SubscriptionBanner({ sub, access, onRefresh }) {
     padding: '0.5rem 1.5rem',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
     fontSize: '0.8rem', fontWeight: 500,
-    background: access === 'grace' ? '#7c3aed' : '#d97706',
+    background: '#d97706',
     color: '#fff',
   };
 
@@ -27,10 +27,7 @@ function SubscriptionBanner({ sub, access, onRefresh }) {
     <div style={bannerStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <Clock size={14} />
-        {access === 'trial'
-          ? `Free trial — ${days > 0 ? `${days} day${days !== 1 ? 's' : ''} remaining` : 'expires today'}. Activate a license key to continue.`
-          : `Grace period — subscription expired. ${Math.max(0, GRACE_DAYS + days)} day${Math.abs(GRACE_DAYS + days) !== 1 ? 's' : ''} left to activate.`
-        }
+        {`Free trial — ${days > 0 ? `${days} day${days !== 1 ? 's' : ''} remaining` : 'expires today'}. Activate a license key to continue.`}
       </div>
       <button onClick={onRefresh} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '0.25rem 0.75rem', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem' }}>
         Activate License

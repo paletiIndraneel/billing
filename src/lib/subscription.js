@@ -2,8 +2,11 @@
  * NEXAURA — Subscription Management
  *
  * Plans: trial (14 days) → basic / pro (annual / monthly)
- * Storage: localStorage['lekhya_subscription'] (JSON); licenses validated via Supabase RPC
- * Grace period: 7 days after expiry before hard lock
+ * Storage: localStorage['lekhya_subscription'] (JSON, local cache) — the trial
+ * clock's source of truth is companies.trial_started_at (server-side, set
+ * once via the ensure_trial_started RPC so it can't be reset locally).
+ * Licenses are validated via Supabase RPC. No grace period — access hard
+ * blocks the moment a trial or subscription's expiresAt passes.
  */
 import { supabase } from './supabase';
 
@@ -12,7 +15,6 @@ const readSub = () => { try { return JSON.parse(localStorage.getItem(KEY)) || nu
 const writeSub = (s) => localStorage.setItem(KEY, JSON.stringify(s));
 
 export const TRIAL_DAYS = 14;
-export const GRACE_DAYS = 7;
 
 export const PLAN_LABELS = {
   trial: 'Free Trial',
@@ -27,11 +29,39 @@ export async function getSubscription() {
   return readSub();
 }
 
-/** Seeds a fresh 14-day trial if no subscription record exists */
+/**
+ * Ensures a trial has been started for the current company, using the
+ * `ensure_trial_started` RPC as the source of truth (it sets — once,
+ * idempotently — companies.trial_started_at server-side, so the trial clock
+ * can't be reset by clearing localStorage or switching browser/device).
+ * Falls back to the local cache (or, as a last resort, a local seed) when
+ * offline. Licensed/suspended subscriptions are left untouched.
+ */
 export async function ensureTrialStarted() {
   const existing = await getSubscription();
+  if (existing && existing.status !== 'trial') return existing;
+
+  const companyId = localStorage.getItem('lekhya_company_id');
+  if (companyId) {
+    try {
+      const { data: startedAt, error } = await supabase.rpc('ensure_trial_started', { p_company_id: companyId });
+      if (!error && startedAt) {
+        const trial = {
+          status: 'trial',
+          plan: 'trial',
+          activatedAt: startedAt,
+          expiresAt: new Date(new Date(startedAt).getTime() + TRIAL_DAYS * 86400000).toISOString(),
+          licenseKey: null,
+        };
+        writeSub(trial);
+        return trial;
+      }
+    } catch { /* offline — fall back to cache below */ }
+  }
+
   if (existing) return existing;
 
+  // First-ever load with no network reachable and nothing cached yet.
   const now = new Date();
   const trial = {
     status: 'trial',
@@ -46,17 +76,15 @@ export async function ensureTrialStarted() {
 
 /**
  * Evaluates current subscription access level.
- * Returns: 'active' | 'trial' | 'grace' | 'expired'
+ * Returns: 'active' | 'trial' | 'expired'
  */
 export function evaluateAccess(sub) {
   if (!sub) return 'expired';
   const now = Date.now();
   const expiry = new Date(sub.expiresAt).getTime();
-  const graceEnd = expiry + GRACE_DAYS * 86400000;
 
   if (sub.status === 'suspended') return 'expired';
   if (now <= expiry) return sub.status === 'trial' ? 'trial' : 'active';
-  if (now <= graceEnd) return 'grace';
   return 'expired';
 }
 

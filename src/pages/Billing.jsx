@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { updateOrder } from '../api/orders';
+import { useLoading } from '../components/LoadingOverlay';
 import { useTable } from '../api/useTable';
 import { QK } from '../api/realtime';
 import { listParties, createParty } from '../api/parties';
@@ -469,6 +470,7 @@ export default function Billing() {
   const location = useLocation();
   const navigate = useNavigate();
   const [prefillOrderId, setPrefillOrderId] = useState(null);
+  const { start, stop } = useLoading();
   const parties = useTable(QK.parties, listParties);
   const products = useTable(QK.products, listProducts);
   const productVariants = useTable(QK.variants, listVariants);
@@ -836,7 +838,7 @@ export default function Billing() {
       }
     }
 
-    setSaving(true);
+    setSaving(true); start();
     try {
       const company = (await getCompany()) ?? {};
       const defaultTheme = localStorage.getItem('lekhya_theme_invoice') || 'classic';
@@ -1031,7 +1033,7 @@ export default function Billing() {
     } catch (err) {
       toast('Failed to save invoice: ' + err.message, 'error');
     } finally {
-      setSaving(false);
+      setSaving(false); stop();
     }
   };
 
@@ -1085,7 +1087,7 @@ export default function Billing() {
     for (const item of invoiceItems) {
       if (!item.qty || item.qty < 1) { toast(`Qty for "${item.name}" must be at least 1`, 'warning'); return; }
     }
-    setSaving(true);
+    setSaving(true); start();
     try {
       const co = await getCompany();
       const company = co ?? {};
@@ -1097,7 +1099,7 @@ export default function Billing() {
     } catch (err) {
       toast('Preview failed: ' + err.message, 'error');
     } finally {
-      setSaving(false);
+      setSaving(false); stop();
     }
   };
 
@@ -1120,7 +1122,7 @@ export default function Billing() {
   const handlePrintPDF = async () => {
     if (!savedInvoice) return;
     const { invoice, party, lineItems, company, finalTaxType, defaultTheme } = savedInvoice;
-    setSaving(true);
+    setSaving(true); start();
     try {
       const doc = await buildPDF(invoice, party, lineItems, company, defaultTheme, finalTaxType);
       doc.save(`${invoice.invoiceNumber || `INV-${invoice.id}`}.pdf`);
@@ -1128,7 +1130,7 @@ export default function Billing() {
     } catch (err) {
       toast('PDF generation failed: ' + err.message, 'error');
     } finally {
-      setSaving(false);
+      setSaving(false); stop();
     }
   };
 
@@ -1141,7 +1143,7 @@ export default function Billing() {
 
   const handleSaveDraft = async () => {
     if (!selectedParty && invoiceItems.length === 0) { toast('Add party or items before saving draft', 'warning'); return; }
-    setSaving(true);
+    setSaving(true); start();
     try {
       const lineItems = invoiceItems.map(item => ({
         variantId: item.id, productId: item.productId,
@@ -1194,7 +1196,7 @@ export default function Billing() {
     } catch (err) {
       toast('Draft save failed: ' + err.message, 'error');
     } finally {
-      setSaving(false);
+      setSaving(false); stop();
     }
   };
 
@@ -1282,7 +1284,7 @@ export default function Billing() {
       return;
     }
 
-    setSaving(true);
+    setSaving(true); start();
     try {
       const company = (await getCompany()) ?? {};
       const party = parties?.find(p => p.id === inv.partyId);
@@ -1368,7 +1370,7 @@ export default function Billing() {
     } catch (err) {
       toast('Failed to issue note: ' + err.message, 'error');
     } finally {
-      setSaving(false);
+      setSaving(false); stop();
     }
   };
 

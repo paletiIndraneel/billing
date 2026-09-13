@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
+import { QK } from '../api/realtime';
 import { getCompany, updateCompany } from '../api/company';
-import { listParties } from '../api/parties';
-import { listProducts } from '../api/products';
+import { listParties, createParty } from '../api/parties';
+import { listProducts, createProduct } from '../api/products';
+import { createVariant } from '../api/variants';
+import { adjustStock } from '../services/stockService';
 import { listInvoices } from '../api/invoices';
 import { listInvoiceItems } from '../api/invoiceItems';
 import { listLeads } from '../api/leads';
 import { listTransactions } from '../api/transactions';
 import { listExpenses } from '../api/expenses';
 import { listPurchases } from '../api/purchases';
-import { Save, Download, Building2, KeyRound, FileSpreadsheet, Shield, Key, RefreshCw } from 'lucide-react';
+import { Save, Download, Upload, Building2, KeyRound, FileSpreadsheet, FileCode2, Table, Shield, Key, RefreshCw } from 'lucide-react';
 import { useToast } from '../components/Toast';
+import { useLoading } from '../components/LoadingOverlay';
 import { validateGSTIN, validateIFSC, validatePhone, validateEmail } from '../utils/validators';
 import { getSubscription, evaluateAccess, daysRemaining, activateLicense, deactivateSubscription, PLAN_LABELS } from '../lib/subscription';
 
@@ -32,6 +37,8 @@ const INVOICE_PREFIXES = ['INV', 'BILL', 'TAX', 'SI', 'PI'];
 
 export default function Settings() {
   const toast = useToast();
+  const qc = useQueryClient();
+  const { start, stop, withLoading } = useLoading();
   const defaultCompany = {
     name: '', gstin: '', address: '', phone: '', email: '',
     bankName: '', bankAccount: '', bankIFSC: '', upiId: ''
@@ -116,7 +123,7 @@ export default function Settings() {
     if (!emailCheck.valid) { toast(emailCheck.message, 'error'); return; }
     const ifscCheck = validateIFSC(company.bankIFSC);
     if (!ifscCheck.valid) { toast(ifscCheck.message, 'error'); return; }
-    setSaving(true);
+    setSaving(true); start();
     try {
       await updateCompany({
         name: company.name, gstin: company.gstin, address: company.address, phone: company.phone,
@@ -130,7 +137,7 @@ export default function Settings() {
     } catch {
       toast('Failed to save settings', 'error');
     } finally {
-      setSaving(false);
+      setSaving(false); stop();
     }
   };
 
@@ -138,7 +145,7 @@ export default function Settings() {
     e.preventDefault();
     if (cpNew.length < 8) { toast('New password must be at least 8 characters', 'warning'); return; }
     if (cpNew !== cpConfirm) { toast('Passwords do not match', 'error'); return; }
-    setCpSaving(true);
+    setCpSaving(true); start();
     try {
       const { error } = await supabase.auth.updateUser({ password: cpNew });
       if (error) { toast('Failed to change password: ' + error.message, 'error'); return; }
@@ -147,11 +154,11 @@ export default function Settings() {
     } catch (err) {
       toast('Failed to change password: ' + err.message, 'error');
     } finally {
-      setCpSaving(false);
+      setCpSaving(false); stop();
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = () => withLoading(async () => {
     try {
       const [parties, products, invoices, invoiceItemsData, leads, transactions, expenses, purchasesData] = await Promise.all([
         listParties(),
@@ -191,9 +198,9 @@ export default function Settings() {
     } catch (err) {
       toast('Export failed: ' + err.message, 'error');
     }
-  };
+  });
 
-  const handleExportCSV = async () => {
+  const handleExportCSV = () => withLoading(async () => {
     try {
       const [invoices, parties] = await Promise.all([listInvoices(), listParties()]);
       const partyMap = {};
@@ -226,9 +233,9 @@ export default function Settings() {
     } catch {
       toast('CSV export failed', 'error');
     }
-  };
+  });
 
-  const handleExportTally = async () => {
+  const handleExportTally = () => withLoading(async () => {
     try {
       const [invoices, parties] = await Promise.all([listInvoices(), listParties()]);
       const partyMap = {};
@@ -272,6 +279,119 @@ export default function Settings() {
     } catch {
       toast('Tally export failed', 'error');
     }
+  });
+
+  const downloadProductTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet([{
+      'Product Name': 'Sample Product', 'HSN/SAC': '1234', 'Inventory Mode': 'packed',
+      'Base Unit': '', 'Pack Size': 1, 'Unit': 'PCS', 'Purchase Price': 100, 'Selling Price': 150,
+      'GST Rate': 18, 'Initial Stock (Packs)': 0, 'Reorder Point': 10, 'Barcode': '',
+    }]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    XLSX.writeFile(wb, 'nexaura-products-template.xlsx');
+  };
+
+  const downloadPartyTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet([{
+      'Name': 'Sample Customer', 'Type': 'Customer', 'GSTIN': '', 'GST Type': '',
+      'Phone': '', 'Email': '', 'Address': '', 'Credit Limit': 0, 'Credit Days': 0,
+    }]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Parties');
+    XLSX.writeFile(wb, 'nexaura-parties-template.xlsx');
+  };
+
+  const readSheetRows = async (file) => {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+  };
+
+  const handleImportProducts = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    withLoading(async () => {
+      try {
+        const rows = await readSheetRows(file);
+        const existingProducts = await listProducts();
+        let created = 0, skipped = 0;
+        for (const row of rows) {
+          const name = String(row['Product Name'] || '').trim();
+          if (!name) { skipped++; continue; }
+          try {
+            let prod = existingProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+            if (!prod) {
+              prod = await createProduct({
+                name,
+                hsn: row['HSN/SAC'] || '',
+                inventoryMode: String(row['Inventory Mode'] || 'packed').toLowerCase() === 'bulk' ? 'bulk' : 'packed',
+                masterStock: 0,
+                baseUnit: row['Base Unit'] ? String(row['Base Unit']).toUpperCase() : null,
+              });
+              existingProducts.push(prod);
+            }
+            const purchasePrice = Number(row['Purchase Price']) || 0;
+            const variant = await createVariant({
+              productId: prod.id,
+              packSize: Number(row['Pack Size']) || 1,
+              unit: row['Unit'] || 'PCS',
+              purchasePrice,
+              sellingPrice: Number(row['Selling Price']) || 0,
+              gstRate: Number(row['GST Rate']) || 0,
+              stockQty: 0,
+              reorderPoint: Number(row['Reorder Point']) || 10,
+              barcode: row['Barcode'] || '',
+            });
+            const initialPacks = Number(row['Initial Stock (Packs)']) || 0;
+            if (initialPacks > 0) {
+              await adjustStock({ variantId: variant.id, productId: prod.id, packsDelta: initialPacks, type: 'opening', reference: 'Imported from Excel', unitCost: purchasePrice });
+            }
+            created++;
+          } catch { skipped++; }
+        }
+        toast(`Imported ${created} product${created !== 1 ? 's' : ''}${skipped ? `, skipped ${skipped} row${skipped !== 1 ? 's' : ''}` : ''}`, created ? 'success' : 'warning');
+        for (const k of [QK.products, QK.variants, QK.stockLedger]) qc.invalidateQueries({ queryKey: [k] });
+      } catch (err) {
+        toast('Import failed: ' + err.message, 'error');
+      }
+    });
+  };
+
+  const handleImportParties = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    withLoading(async () => {
+      try {
+        const rows = await readSheetRows(file);
+        let created = 0, skipped = 0;
+        for (const row of rows) {
+          const name = String(row['Name'] || '').trim();
+          if (!name) { skipped++; continue; }
+          try {
+            await createParty({
+              name,
+              type: String(row['Type'] || 'Customer').trim() === 'Vendor' ? 'Vendor' : 'Customer',
+              gstin: row['GSTIN'] || '',
+              gstType: row['GST Type'] || '',
+              phone: row['Phone'] || '',
+              email: row['Email'] || '',
+              address: row['Address'] || '',
+              creditLimit: row['Credit Limit'] ? Number(row['Credit Limit']) : null,
+              creditDays: row['Credit Days'] ? Number(row['Credit Days']) : null,
+              activities: [],
+            });
+            created++;
+          } catch { skipped++; }
+        }
+        toast(`Imported ${created} part${created !== 1 ? 'ies' : 'y'}${skipped ? `, skipped ${skipped} row${skipped !== 1 ? 's' : ''}` : ''}`, created ? 'success' : 'warning');
+        qc.invalidateQueries({ queryKey: [QK.parties] });
+      } catch (err) {
+        toast('Import failed: ' + err.message, 'error');
+      }
+    });
   };
 
   if (!loaded) return null;
@@ -453,15 +573,49 @@ export default function Settings() {
         </p>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button className="btn btn-primary" onClick={handleExportTally}>
-            <Download size={16} /> Export to Tally XML
+            <FileCode2 size={16} /> Export to Tally XML
           </button>
           <button className="btn btn-secondary" onClick={handleExportCSV}>
-            <Download size={16} /> Export Invoices (CSV)
+            <Table size={16} /> Export Invoices (CSV)
           </button>
         </div>
         <div style={{ marginTop: '1rem', padding: '0.875rem', background: 'rgba(79,70,229,0.06)', borderRadius: 8, border: '1px solid rgba(79,70,229,0.15)', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
           <strong style={{ color: 'var(--primary)' }}>Tally Import:</strong> Open Tally Prime → Gateway of Tally → Import Data → Vouchers → Select the exported XML file.<br />
           <strong style={{ color: 'var(--primary)' }}>CSV:</strong> Can be opened in Excel, Google Sheets, or imported into any accounting software.
+        </div>
+      </div>
+
+      {/* ── Import Data ── */}
+      <div className="card">
+        {sectionTitle(<Upload size={20} style={{ color: 'var(--primary)' }} />, 'Import Data')}
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+          Bulk-import Inventory items or Customers/Vendors from an Excel (.xlsx) or CSV file — including files exported from Tally. Download the template first so your column headers match exactly.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+          <div style={{ padding: '0.875rem', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.75rem' }}>Products / Inventory</div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-secondary" onClick={downloadProductTemplate}>
+                <Download size={15} /> Template
+              </button>
+              <label className="btn btn-primary" style={{ cursor: 'pointer' }}>
+                <Upload size={15} /> Import
+                <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleImportProducts} />
+              </label>
+            </div>
+          </div>
+          <div style={{ padding: '0.875rem', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.75rem' }}>Customers / Vendors</div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-secondary" onClick={downloadPartyTemplate}>
+                <Download size={15} /> Template
+              </button>
+              <label className="btn btn-primary" style={{ cursor: 'pointer' }}>
+                <Upload size={15} /> Import
+                <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleImportParties} />
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -564,7 +718,7 @@ export default function Settings() {
 
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
           <button className="btn btn-primary" onClick={handleExport}>
-            <Download size={16} /> Export Backup (Excel)
+            <FileSpreadsheet size={16} /> Export Backup (Excel)
           </button>
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { updateOrder } from '../api/orders';
+import { useLoading } from '../components/LoadingOverlay';
 import { useTable } from '../api/useTable';
 import { QK } from '../api/realtime';
 import { getCompany, nextInvoiceNumber } from '../api/company';
@@ -153,6 +154,7 @@ export default function Purchases() {
   const location = useLocation();
   const navigate = useNavigate();
   const [prefillOrderId, setPrefillOrderId] = useState(null);
+  const { start, stop } = useLoading();
   const parties = useTable(QK.parties, listParties);
   const vendors = useMemo(() => parties.filter(p => p.type === 'Vendor'), [parties]);
   const products = useTable(QK.products, listProducts);
@@ -370,7 +372,7 @@ export default function Purchases() {
     for (const item of items) {
       if (!item.qty || item.qty < 1) { toast(`Qty for "${item.name}" must be at least 1`, 'warning'); return; }
     }
-    setSaving(true);
+    setSaving(true); start();
 
     const lineItems = items.map(item => ({
       variantId: item.variantId, productId: item.productId,
@@ -395,7 +397,7 @@ export default function Purchases() {
       poNumber = await nextInvoiceNumber();
     } catch (err) {
       toast('Save failed: ' + err.message, 'error');
-      setSaving(false);
+      setSaving(false); stop();
       return;
     }
 
@@ -459,7 +461,7 @@ export default function Purchases() {
         } catch { /* swallow */ }
       }
       toast('Purchase save failed and was rolled back: ' + err.message, 'error');
-      setSaving(false);
+      setSaving(false); stop();
       return;
     }
 
@@ -480,7 +482,7 @@ export default function Purchases() {
       qc.invalidateQueries({ queryKey: [QK.orders] });
     }
     toast(`Purchase ${poNumber} saved! Stock updated.`, 'success');
-    setSaving(false);
+    setSaving(false); stop();
   };
 
   const openViewBill = async (bill) => {

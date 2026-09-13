@@ -15,6 +15,7 @@ import { convertUnit } from '../utils/unitConversion';
 import { Plus, Edit2, Trash2, Search, TrendingDown, History, ShoppingCart, BookOpen, Package, IndianRupee } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
+import { useLoading } from '../components/LoadingOverlay';
 
 const UNITS = ['PCS', 'KG', 'GM', 'LTR', 'ML', 'MTR', 'CM', 'KWH', 'BOX', 'PKT', 'SET', 'NOS', 'PAIR', 'ROLL', 'BAG', 'BUNDLE'];
 
@@ -64,6 +65,7 @@ export default function Inventory() {
   const activeBatches = useTable(QK.batches, listActiveBatches);
   const qc = useQueryClient();
   const toast = useToast();
+  const { start, stop } = useLoading();
 
   const [search, setSearch] = useState('');
   const [editModal, setEditModal] = useState(null);
@@ -119,6 +121,8 @@ export default function Inventory() {
     const packSizeNum = Number(data.packSize) || 1;
     if (packSizeNum <= 0) { toast('Pack size must be a positive number', 'warning'); return; }
 
+    start();
+    try {
     if (mode === 'add') {
       // Duplicate variant check (against in-memory lists)
       const prod = products.find(p => p.name.trim().toLowerCase() === data.productName.trim().toLowerCase());
@@ -198,17 +202,19 @@ export default function Inventory() {
     qc.invalidateQueries({ queryKey: [QK.variants] });
     qc.invalidateQueries({ queryKey: [QK.stockLedger] });
     qc.invalidateQueries({ queryKey: [QK.priceHistory] });
+    } finally { stop(); }
   };
 
   const deleteVariant = async () => {
     const { variantId, productId } = editModal;
+    start();
     try {
       await apiDeleteVariant(variantId);
       const remaining = (await listVariantsByProduct(productId)).length;
       if (remaining === 0) await apiDeleteProduct(productId);
       toast('Deleted', 'success');
       setEditModal(null);
-    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
+    } catch (err) { toast('Delete failed: ' + err.message, 'error'); } finally { stop(); }
     qc.invalidateQueries({ queryKey: [QK.variants] });
     qc.invalidateQueries({ queryKey: [QK.products] });
   };
@@ -222,6 +228,7 @@ export default function Inventory() {
     const baseQtyIn = packsNum * packSz;
     const priceNum = Number(purchasePrice) || 0;
 
+    start();
     try {
       await createPurchase({
         productId: variant.productId,
@@ -252,7 +259,7 @@ export default function Inventory() {
       }
       toast(`Added ${packsNum} packs (${baseQtyIn} ${variant.unit}) of "${variant.productName}"`, 'success');
       setPurchaseModal(null);
-    } catch (err) { toast('Purchase failed: ' + err.message, 'error'); }
+    } catch (err) { toast('Purchase failed: ' + err.message, 'error'); } finally { stop(); }
     qc.invalidateQueries({ queryKey: [QK.purchases] });
     qc.invalidateQueries({ queryKey: [QK.variants] });
     qc.invalidateQueries({ queryKey: [QK.products] });
@@ -265,6 +272,7 @@ export default function Inventory() {
     const { variant, qty } = outModal;
     const packSz = ps(variant);
     const baseQtyOut = Number(qty) * packSz;
+    start();
     try {
       await adjustStock({
         variantId: variant.id, productId: variant.productId,
@@ -272,7 +280,7 @@ export default function Inventory() {
       });
       toast(`Removed ${qty} packs (${baseQtyOut} ${variant.unit})`, 'success');
       setOutModal(null);
-    } catch (err) { toast(err.message, 'error'); }
+    } catch (err) { toast(err.message, 'error'); } finally { stop(); }
     qc.invalidateQueries({ queryKey: [QK.variants] });
     qc.invalidateQueries({ queryKey: [QK.products] });
     qc.invalidateQueries({ queryKey: [QK.stockLedger] });
@@ -285,6 +293,7 @@ export default function Inventory() {
       .filter(i => Number(i.qtyStr) > 0)
       .map(i => ({ variantId: i.variant.id, qty: Number(i.qtyStr) }));
     if (packItems.length === 0) { toast('Enter at least one packaging quantity', 'warning'); return; }
+    start();
     try {
       await packageStock({ productId: product.id, packagingItems: packItems, note: note || '' });
       const totalPacked = packItems.reduce((s, i) => {
@@ -296,7 +305,7 @@ export default function Inventory() {
       setPackagingModal(null);
     } catch (err) {
       toast(err.message, 'error');
-    }
+    } finally { stop(); }
     qc.invalidateQueries({ queryKey: [QK.products] });
     qc.invalidateQueries({ queryKey: [QK.variants] });
     qc.invalidateQueries({ queryKey: [QK.stockLedger] });
