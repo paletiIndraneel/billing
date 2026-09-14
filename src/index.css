@@ -11,6 +11,7 @@
   --success: #10B981;
   --danger: #EF4444;
   --warning: #F59E0B;
+  --aura-accent: #14B8A6;
 
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
@@ -30,6 +31,7 @@
   --border: #26262A;
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --aura-accent: #2DD4BF;
 }
 
 * {
@@ -77,6 +79,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  background: radial-gradient(160px 70px at 32px 50%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%);
 }
 
 .sidebar-nav {
@@ -97,14 +100,15 @@ body {
 }
 
 .nav-item:hover {
-  background-color: rgba(79, 70, 229, 0.05);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 85%);
   color: var(--primary);
 }
 
 .nav-item.active {
-  background-color: rgba(79, 70, 229, 0.08);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 12%, transparent), color-mix(in srgb, var(--aura-accent) 6%, transparent) 85%);
   color: var(--primary);
   border-right: 2px solid var(--primary);
+  box-shadow: inset 3px 0 10px -6px color-mix(in srgb, var(--primary) 60%, transparent);
 }
 
 .main-content {
@@ -165,10 +169,12 @@ body {
 .btn-primary {
   background-color: var(--primary);
   color: white;
+  box-shadow: 0 2px 10px -3px color-mix(in srgb, var(--primary) 50%, transparent);
 }
 
 .btn-primary:hover:not(:disabled) {
   background-color: var(--primary-hover);
+  box-shadow: 0 4px 16px -3px color-mix(in srgb, var(--primary) 60%, transparent);
 }
 
 .btn-secondary {
@@ -239,6 +245,7 @@ body {
 .tab-btn.active {
   color: var(--primary);
   border-bottom-color: var(--primary);
+  box-shadow: 0 6px 12px -8px color-mix(in srgb, var(--primary) 70%, transparent);
 }
 
 .tab-btn:hover {
@@ -366,6 +373,7 @@ tr:hover td {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent), 0 0 0 5px color-mix(in srgb, var(--aura-accent) 6%, transparent);
 }
 
 textarea.form-input {
@@ -839,6 +847,113 @@ input[type=number].form-input {
   .auth-logo-halo::before,
   .auth-sparkle {
     animation: none;
+  }
+}
+
+/* Landing (the app's opening screen) — the same aurora/star family, plus the one
+   thing that makes this screen the "hero": an orbit ring around the logo and a
+   spotlight that follows the pointer, since there's no form here to focus on. */
+.landing-card {
+  --mx: 50%;
+  --my: 32%;
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(320px circle at var(--mx) var(--my), rgba(79, 70, 229, 0.14), transparent 70%);
+  background: radial-gradient(320px circle at var(--mx) var(--my), color-mix(in srgb, var(--primary) 16%, transparent), transparent 70%);
+  transition: opacity 0.3s ease;
+}
+
+.landing-orbit {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 1.25rem;
+}
+
+.landing-orbit img {
+  position: relative;
+  z-index: 1;
+  width: 68px;
+  height: 68px;
+  display: block;
+  object-fit: contain;
+}
+
+.landing-orbit::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  border-radius: 50%;
+  border: 1px dashed rgba(79, 70, 229, 0.28);
+  border: 1px dashed color-mix(in srgb, var(--primary) 32%, transparent);
+  animation: orbitSpin 22s linear infinite;
+}
+
+.landing-orbit::after {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px 1px var(--primary);
+  transform-origin: 3px 54px;
+  animation: orbitSpin 22s linear infinite;
+}
+
+:root[data-theme="dark"] .landing-orbit::before {
+  border-color: rgba(165, 180, 252, 0.4);
+}
+
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.landing-cta {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-cta::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.55s ease;
+}
+
+.landing-cta:hover::before {
+  left: 130%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-orbit::before,
+  .landing-orbit::after {
+    animation: none;
+  }
+  .landing-cta::before {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .landing-card::after {
+    display: none;
   }
 }
 
