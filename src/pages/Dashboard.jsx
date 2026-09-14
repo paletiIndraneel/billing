@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { useTable } from '../api/useTable';
 import { QK } from '../api/realtime';
 import { listInvoices } from '../api/invoices';
@@ -8,7 +9,7 @@ import { listParties } from '../api/parties';
 import { listExpenses } from '../api/expenses';
 import { listRecentPriceHistory } from '../api/priceHistory';
 import { listOrders } from '../api/orders';
-import { IndianRupee, FileText, Package, AlertTriangle, TrendingUp, TrendingDown, Bell, Clock, ShoppingCart, Truck } from 'lucide-react';
+import { IndianRupee, FileText, Package, AlertTriangle, TrendingUp, TrendingDown, Bell, Clock, ShoppingCart, Truck, Sunrise, Sun, Sunset, Moon } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
 function fmtINR(n) {
@@ -23,6 +24,13 @@ function isOverdue(inv) {
   if (inv.status !== 'Pending') return false;
   if (inv.dueDate) return new Date(inv.dueDate) < new Date();
   return daysSince(inv.date) > 30;
+}
+
+function greetingForHour(h) {
+  if (h < 12) return { text: 'Good morning', Icon: Sunrise };
+  if (h < 17) return { text: 'Good afternoon', Icon: Sun };
+  if (h < 20) return { text: 'Good evening', Icon: Sunset };
+  return { text: 'Good night', Icon: Moon };
 }
 
 function fmtDate(d) {
@@ -135,6 +143,13 @@ export default function Dashboard() {
   const parties         = useTable(QK.parties, listParties);
   const expenses        = useTable(QK.expenses, listExpenses);
   const toast           = useToast();
+
+  const [username, setUsername] = useState('');
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUsername(data?.user?.user_metadata?.username || data?.user?.email?.split('@')[0] || '');
+    });
+  }, []);
 
   const [dateRange, setDateRange] = useState('month');
   const [customFrom, setCustomFrom] = useState('');
@@ -289,7 +304,9 @@ export default function Dashboard() {
       {/* ── Header + Date Filter ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
         <div>
-          <h1 className="page-title" style={{ marginBottom: '0.25rem' }}>Business Overview</h1>
+          <h1 className="page-title" style={{ marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            {(() => { const { text, Icon } = greetingForHour(new Date().getHours()); return <><Icon size={22} />{text}{username ? `, ${username}` : ''}</>; })()}
+          </h1>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </span>
