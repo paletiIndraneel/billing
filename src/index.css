@@ -710,6 +710,138 @@ input[type=number].form-input {
   margin-bottom: 2rem;
 }
 
+/* Aurora / starfield treatment — used by the Setup Wizard's first-run screen only */
+.auth-screen--aurora {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 75% 55% at 18% -8%, rgba(79, 70, 229, 0.30), transparent 60%),
+    radial-gradient(ellipse 65% 50% at 88% 4%, rgba(20, 184, 166, 0.22), transparent 55%),
+    radial-gradient(ellipse 60% 65% at 50% 112%, rgba(129, 140, 248, 0.16), transparent 60%),
+    var(--bg-color);
+  background-size: 200% 200%, 200% 200%, 200% 200%, auto;
+  animation: auroraDrift 36s ease-in-out infinite;
+}
+
+:root[data-theme="dark"] .auth-screen--aurora {
+  background:
+    radial-gradient(ellipse 75% 55% at 18% -8%, rgba(129, 140, 248, 0.45), transparent 60%),
+    radial-gradient(ellipse 65% 50% at 88% 4%, rgba(45, 212, 191, 0.30), transparent 55%),
+    radial-gradient(ellipse 60% 65% at 50% 112%, rgba(129, 140, 248, 0.24), transparent 60%),
+    var(--bg-color);
+  background-size: 200% 200%, 200% 200%, 200% 200%, auto;
+}
+
+.auth-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 22%, rgba(79, 70, 229, 0.55), transparent),
+    radial-gradient(1px 1px at 28% 68%, rgba(79, 70, 229, 0.4), transparent),
+    radial-gradient(1.6px 1.6px at 46% 12%, rgba(79, 70, 229, 0.5), transparent),
+    radial-gradient(1px 1px at 63% 78%, rgba(79, 70, 229, 0.4), transparent),
+    radial-gradient(1.4px 1.4px at 79% 34%, rgba(79, 70, 229, 0.5), transparent),
+    radial-gradient(1px 1px at 92% 62%, rgba(79, 70, 229, 0.4), transparent),
+    radial-gradient(1.2px 1.2px at 8% 85%, rgba(79, 70, 229, 0.45), transparent),
+    radial-gradient(1.2px 1.2px at 55% 90%, rgba(79, 70, 229, 0.4), transparent);
+  background-repeat: repeat;
+  background-size: 340px 340px;
+  animation: starDrift 90s linear infinite, starTwinkle 5s ease-in-out infinite alternate;
+}
+
+:root[data-theme="dark"] .auth-stars {
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 22%, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(1px 1px at 28% 68%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1.6px 1.6px at 46% 12%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(1px 1px at 63% 78%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1.4px 1.4px at 79% 34%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(1px 1px at 92% 62%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1.2px 1.2px at 8% 85%, rgba(255, 255, 255, 0.75), transparent),
+    radial-gradient(1.2px 1.2px at 55% 90%, rgba(255, 255, 255, 0.7), transparent);
+  background-size: 340px 340px;
+}
+
+@keyframes auroraDrift {
+  0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
+  50% { background-position: 8% 6%, 92% 8%, 46% 94%, 0 0; }
+}
+
+@keyframes starDrift {
+  from { background-position: 0 0; }
+  to { background-position: -340px 340px; }
+}
+
+@keyframes starTwinkle {
+  from { opacity: 0.65; }
+  to { opacity: 1; }
+}
+
+.auth-card--glass {
+  background: rgba(255, 255, 255, 0.82);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(79, 70, 229, 0.22);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  box-shadow: 0 8px 40px rgba(79, 70, 229, 0.16), var(--shadow-lg);
+  box-shadow: 0 8px 44px color-mix(in srgb, var(--primary) 22%, transparent), var(--shadow-lg);
+  position: relative;
+  z-index: 1;
+}
+
+.auth-logo-halo {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 0.75rem;
+}
+
+.auth-logo-halo::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.35), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--primary) 40%, transparent), transparent 70%);
+  animation: haloPulse 4s ease-in-out infinite;
+}
+
+.auth-logo-halo img {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: block;
+  object-fit: contain;
+}
+
+@keyframes haloPulse {
+  0%, 100% { opacity: 0.7; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+.auth-sparkle {
+  display: inline-flex;
+  color: var(--primary);
+  animation: sparkleTwinkle 2.6s ease-in-out infinite;
+  vertical-align: -2px;
+}
+
+@keyframes sparkleTwinkle {
+  0%, 100% { opacity: 0.5; transform: scale(0.85) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.05) rotate(8deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-screen--aurora,
+  .auth-stars,
+  .auth-logo-halo::before,
+  .auth-sparkle {
+    animation: none;
+  }
+}
+
 /* Custom Dropdown / Combobox styles */
 .dropdown-item-hover {
   transition: background-color 0.15s ease;

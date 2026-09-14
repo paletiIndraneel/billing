@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowRight, ArrowLeft, Check, Cloud } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Cloud, Sparkles } from 'lucide-react';
 import logoUrl from '../assets/Nexaura logo.png';
 import { useToast } from '../components/Toast';
 
@@ -85,11 +85,16 @@ export default function SetupWizard({ onComplete, onBack }) {
   };
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card" style={{ maxWidth: 520 }}>
+    <div className="auth-screen auth-screen--aurora">
+      <div className="auth-stars" aria-hidden="true" />
+      <div className="auth-card auth-card--glass" style={{ maxWidth: 520 }}>
         <div className="auth-logo">
-          <img src={logoUrl} alt="NEXAURA" style={{ width: 52, height: 52, margin: '0 auto 0.75rem', display: 'block', objectFit: 'contain' }} />
-          <h1 style={{ fontSize: '1.625rem', fontWeight: 700, marginBottom: '0.25rem' }}>Welcome to NEXAURA</h1>
+          <div className="auth-logo-halo">
+            <img src={logoUrl} alt="NEXAURA" />
+          </div>
+          <h1 style={{ fontSize: '1.625rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+            Welcome to NEXAURA <Sparkles size={18} className="auth-sparkle" />
+          </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Let's set up your business account</p>
         </div>
 
