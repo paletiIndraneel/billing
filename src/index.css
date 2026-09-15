@@ -829,6 +829,17 @@ input[type=number].form-input {
   50% { opacity: 1; transform: scale(1.06); }
 }
 
+@keyframes landingAuraGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent),
+      0 0 14px 1px color-mix(in srgb, var(--primary) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--aura-accent) 55%, transparent),
+      0 0 26px 5px color-mix(in srgb, var(--aura-accent) 45%, transparent);
+  }
+}
+
 .auth-sparkle {
   display: inline-flex;
   color: var(--primary);
@@ -953,6 +964,343 @@ input[type=number].form-input {
 
 @media (pointer: coarse) {
   .landing-card::after {
+    display: none;
+  }
+}
+
+/* Landing v2 — two-column SaaS layout: marketing left, auth card right */
+.landing-screen {
+  align-items: flex-start;
+  padding: 3rem 2rem;
+}
+
+.landing-layout {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
+  gap: 3rem;
+  align-items: start;
+}
+
+.landing-marketing {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+
+.landing-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  margin-bottom: 0.5rem;
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.landing-brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.landing-tagline {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.landing-headline {
+  font-size: clamp(2rem, 3.2vw + 1rem, 3.25rem);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.25rem;
+}
+
+.landing-headline-accent {
+  background: linear-gradient(100deg, var(--primary), var(--aura-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-description {
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 52ch;
+  margin: 0.5rem 0 1.5rem;
+}
+
+.landing-jump-to-auth {
+  display: none;
+}
+
+/* Product carousel */
+.landing-carousel {
+  margin-bottom: 1.5rem;
+}
+
+.landing-carousel-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1828 / 860;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  background: var(--surface);
+}
+
+.landing-carousel-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transform: scale(1.02) translateX(12px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.landing-carousel-slide.is-active {
+  opacity: 1;
+  transform: scale(1) translateX(0);
+  z-index: 1;
+}
+
+.landing-carousel-caption {
+  padding: 0.85rem 0.25rem 0;
+}
+
+.landing-carousel-caption h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.landing-carousel-caption p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.landing-carousel-dots {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.landing-carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: var(--border);
+  cursor: pointer;
+  transition: background 0.2s ease, width 0.2s ease;
+}
+
+.landing-carousel-dot.is-active {
+  width: 22px;
+  background: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-carousel-slide {
+    transition: opacity 0.2s ease;
+    transform: none;
+  }
+}
+
+/* Feature grid */
+.landing-features {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.landing-feature-card {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.landing-feature-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.landing-feature-card h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.landing-feature-card p {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* Auth panel (right column) */
+.landing-auth-panel {
+  position: static;
+  max-width: 420px;
+  width: 100%;
+  margin-left: auto;
+  padding: 2.25rem 2rem;
+}
+
+@media (max-width: 1024px) {
+  .landing-layout {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
+  .landing-auth-panel {
+    position: static;
+    margin: 0 auto;
+    scroll-margin-top: 1.5rem;
+  }
+
+  .landing-jump-to-auth {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.85rem 1.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+    animation: landingAuraGlow 2.8s ease-in-out infinite;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-screen {
+    padding: 2rem 1rem;
+  }
+
+  .landing-features {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-layout {
+    gap: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-jump-to-auth {
+    animation: none;
+  }
+}
+
+/* Desktop split pane: marketing column scrolls internally, auth card stays put */
+@media (min-width: 1025px) {
+  .landing-screen {
+    height: 100vh;
+  }
+
+  .landing-layout {
+    height: 100%;
+    align-items: stretch;
+  }
+
+  .landing-marketing {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.75rem;
+    padding-bottom: 1.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--primary) 55%, transparent) transparent;
+  }
+
+  .landing-marketing::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .landing-marketing::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--surface) 35%, transparent);
+    backdrop-filter: blur(6px);
+    border-radius: 999px;
+    margin: 4px 0;
+  }
+
+  .landing-marketing::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 70%, transparent), color-mix(in srgb, var(--aura-accent) 70%, transparent));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+
+  .landing-marketing::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, var(--primary), var(--aura-accent));
+    background-clip: padding-box;
+  }
+
+  .landing-auth-panel {
+    align-self: center;
+  }
+}
+
+/* Mouse-reactive aura glow, layered under the starfield */
+.landing-screen {
+  --ax: 50%;
+  --ay: 30%;
+}
+
+.landing-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(560px circle at var(--ax) var(--ay), color-mix(in srgb, var(--primary) 22%, transparent), transparent 65%);
+}
+
+@media (pointer: coarse) {
+  .landing-screen::before {
     display: none;
   }
 }
