@@ -27,8 +27,11 @@ export default function Landing({ onSignIn, onSignUp }) {
         </div>
 
         <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '0.375rem' }}>NEXAURA</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2.75rem' }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
           Business, connected.
+        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '2rem', lineHeight: 1.5 }}>
+          GST billing &amp; invoicing, CRM, inventory, purchases, expenses, and financial reports — all in one platform built for Indian businesses.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
