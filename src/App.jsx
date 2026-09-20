@@ -1,4 +1,4 @@
-import { HashRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { HashRouter, BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon, Menu, Truck } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
 import logo from './assets/Nexaura logo.png';
@@ -18,7 +18,7 @@ import Inventory from './pages/Inventory';
 import SettingsPage from './pages/Settings';
 import SetupWizard from './pages/SetupWizard';
 import Login from './pages/Login';
-import Landing from './pages/Landing';
+import PublicSite from './pages/public/PublicSite';
 import Ledger from './pages/Ledger';
 import Payments from './pages/Payments';
 import Expenses from './pages/Expenses';
@@ -220,10 +220,12 @@ function AuthGate() {
 
   if (authState === 'landing') {
     return (
-      <Landing
-        onSignIn={() => setAuthState('login')}
-        onSignUp={() => setAuthState('setup')}
-      />
+      <BrowserRouter>
+        <PublicSite
+          onSignIn={() => setAuthState('login')}
+          onSignUp={() => setAuthState('setup')}
+        />
+      </BrowserRouter>
     );
   }
 
@@ -237,6 +239,10 @@ function AuthGate() {
     return (
       <Login
         onLogin={(u) => {
+          // Public site may have left a clean-URL path (e.g. /pricing) in the
+          // address bar; clear it so the authenticated app's HashRouter starts
+          // from a known "/" instead of rendering under a stale pathname.
+          window.history.replaceState(null, '', '/');
           qc.clear();
           setUser({ id: u.id, username: u.username, email: u.email || '' });
           setAuthState('app');
@@ -248,18 +254,21 @@ function AuthGate() {
   }
 
   return (
-    <SubscriptionGate>
-      <AppLayout
-        user={user}
-        onLogout={async () => {
-          stopRealtime();
-          await supabase.auth.signOut().catch(() => {});
-          clearSession();
-          setUser(null);
-          setAuthState('landing');
-        }}
-      />
-    </SubscriptionGate>
+    <HashRouter>
+      <SubscriptionGate>
+        <AppLayout
+          user={user}
+          onLogout={async () => {
+            window.history.replaceState(null, '', '/');
+            stopRealtime();
+            await supabase.auth.signOut().catch(() => {});
+            clearSession();
+            setUser(null);
+            setAuthState('landing');
+          }}
+        />
+      </SubscriptionGate>
+    </HashRouter>
   );
 }
 
@@ -268,9 +277,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <LoadingProvider>
-          <Router>
-            <AuthGate />
-          </Router>
+          <AuthGate />
         </LoadingProvider>
       </ToastProvider>
     </QueryClientProvider>

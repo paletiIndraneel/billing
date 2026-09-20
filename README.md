@@ -124,3 +124,4 @@ supabase/
 ## License
 
 Proprietary — NEXAURA. All rights reserved.
+https://nexauraglobal.site/

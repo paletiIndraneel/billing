@@ -1316,3 +1316,406 @@ input[type=number].form-input {
   background-color: rgba(79, 70, 229, 0.15) !important;
 }
 
+/* ── Public marketing site ───────────────────────────────────────────────── */
+.public-site {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+
+.public-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* Header */
+.public-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.public-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+}
+
+.public-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-main);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.public-brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.public-menu-btn {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.4rem;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.public-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-left: auto;
+}
+
+.public-nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.public-nav-link:hover,
+.public-nav-link.active {
+  color: var(--primary);
+}
+
+.public-nav-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-left: 0.5rem;
+}
+
+/* Hero — reuses the app's aurora/starfield treatment (auth-screen--aurora,
+   auth-stars) so the one moment of visual boldness matches the sign-in/setup
+   screens instead of inventing a second identity. */
+.public-hero {
+  padding: 4rem 0 3rem;
+  text-align: center;
+}
+
+.public-hero .public-container {
+  position: relative;
+  z-index: 1;
+  animation: publicHeroIn 0.5s ease both;
+}
+
+@keyframes publicHeroIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.public-eyebrow {
+  display: inline-flex;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.public-hero-title {
+  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 auto 1rem;
+  max-width: 780px;
+}
+
+.public-hero-description {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  max-width: 640px;
+  margin: 0 auto 1.75rem;
+}
+
+.public-hero-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Generic content sections */
+.public-section,
+.public-features-section,
+.public-faq-section {
+  padding: 2.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.public-section h2,
+.public-features-section h2,
+.public-faq-section h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.public-section-description {
+  color: var(--text-muted);
+  line-height: 1.65;
+  max-width: 760px;
+}
+
+.public-list {
+  color: var(--text-muted);
+  line-height: 1.85;
+  padding-left: 1.25rem;
+  max-width: 760px;
+}
+
+.public-features-grid {
+  margin-top: 1.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .public-features-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .public-features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.public-feature-card--link {
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.public-feature-card--link:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* CTA band */
+.public-cta-section {
+  padding: 2.75rem 0;
+  background: color-mix(in srgb, var(--primary) 7%, var(--bg-color));
+  border-top: 1px solid var(--border);
+}
+
+.public-cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.public-cta-inner h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.public-cta-inner p {
+  color: var(--text-muted);
+}
+
+/* FAQ */
+.public-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  max-width: 760px;
+}
+
+.public-faq-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+}
+
+.public-faq-item summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: revert;
+}
+
+.public-faq-item p {
+  margin-top: 0.6rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+/* Pricing / Contact */
+.public-pricing-notice {
+  max-width: 640px;
+}
+
+.public-contact-card {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.5rem;
+  max-width: 560px;
+}
+
+.public-contact-card > svg {
+  color: var(--primary);
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.public-contact-card .btn {
+  margin-top: 0.9rem;
+}
+
+/* Footer */
+.public-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.public-footer-inner {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 2rem;
+  padding: 3rem 0 2rem;
+}
+
+.public-footer-brand p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+
+.public-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.public-footer-col h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.public-footer-col a {
+  color: var(--text-main);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.public-footer-col a:hover {
+  color: var(--primary);
+}
+
+.public-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1.1rem 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.public-footer-bottom a {
+  color: var(--text-muted);
+}
+
+/* Nav collapses to a hamburger/drawer earlier than the footer/content
+   breakpoints — 6 links + Sign In/Start Free need more room than a phone
+   width, so tablets in portrait (768px) get the drawer while landscape
+   tablets/small laptops (1024px+) keep the inline nav. */
+@media (max-width: 960px) {
+  .public-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .public-nav {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(78vw, 320px);
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 1.25rem;
+    padding: 5.5rem 1.5rem 2rem;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    overflow-y: auto;
+  }
+
+  .public-nav--open {
+    transform: translateX(0);
+  }
+
+  .public-nav-actions {
+    margin-left: 0;
+    flex-direction: column;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .public-footer-inner {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .public-hero {
+    padding: 3rem 0 2.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .public-footer-inner {
+    grid-template-columns: 1fr;
+  }
+
+  .public-cta-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .public-contact-card {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-nav,
+  .public-feature-card--link,
+  .public-hero .public-container {
+    transition: none;
+    animation: none;
+  }
+}
+
