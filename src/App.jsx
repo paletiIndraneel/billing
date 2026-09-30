@@ -12,7 +12,7 @@ import SubscriptionGate from './components/SubscriptionGate';
 import { PasswordReset } from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CRM from './pages/CRM';
-import Billing from './pages/Billing';
+import EVBilling from './pages/EVBilling';
 import Inventory from './pages/Inventory';
 import SettingsPage from './pages/Settings';
 import SetupWizard from './pages/SetupWizard';
@@ -128,7 +128,7 @@ function AppLayout({ user, onLogout, isAdmin }) {
           <Routes>
             <Route path="/" element={<ErrorBoundary key={pathname} label="Dashboard"><Dashboard /></ErrorBoundary>} />
             <Route path="/crm" element={<ErrorBoundary key={pathname} label="Customers & Vendors"><CRM /></ErrorBoundary>} />
-            <Route path="/billing" element={isAdmin ? <ErrorBoundary key={pathname} label="EV Billing"><Billing /></ErrorBoundary> : <Dashboard />} />
+            <Route path="/billing" element={isAdmin ? <ErrorBoundary key={pathname} label="EV Billing"><EVBilling /></ErrorBoundary> : <Dashboard />} />
             <Route path="/payments" element={<ErrorBoundary key={pathname} label="Payments"><Payments /></ErrorBoundary>} />
             <Route path="/expenses" element={<ErrorBoundary key={pathname} label="Expenses"><Expenses /></ErrorBoundary>} />
             <Route path="/inventory" element={<ErrorBoundary key={pathname} label="Inventory"><Inventory /></ErrorBoundary>} />
