@@ -1,37 +1,7 @@
-# Environment — never commit credentials
-.env
-.env.local
-.env.*.local
-
-# Node modules
 node_modules/
-
-# Build output
 dist/
-
-# OS files
+.env
+.env.*
+!.env.example
+.vercel/
 .DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-
-# Claude Code project settings
-.claude/
-
-# Logs
-*.log
-npm-debug.log*
-
-# Temp / build artifacts
-*.tmp
-*.bak
-*.pdf
-*.blockmap
-
-# Salesforce CLI cache
-.sf/
-
-# E2E test reports (screenshots + scratch docs, not project source)
-docs/testing/
