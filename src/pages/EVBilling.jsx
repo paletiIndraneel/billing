@@ -70,7 +70,7 @@ export default function EVBilling(){
  const addCustomer=async e=>{
    e.preventDefault();
    if(!customerForm.name.trim())return toast.error('Enter customer name.');
-   const normalizedGstin=customerForm.gstin.replace(/\s+/g,'').toUpperCase(); if(normalizedGstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(normalizedGstin))return toast.error('Enter a valid 15-character GSTIN.');
+   const normalizedGstin=customerForm.gstin.replace(/\s+/g,'').toUpperCase(); if(normalizedGstin && !/^\d{15}$/.test(normalizedGstin) && !/^[A-Z0-9]{15}$/.test(normalizedGstin))return toast.error('GSTIN must be exactly 15 letters/numbers.');
    setCustomerSaving(true);
    try{
      const payload={type:'business',name:customerForm.name.trim(),gstin:normalizedGstin||null,pan:customerForm.pan.trim()||null,billing_address_line1:customerForm.billing_address_line1.trim()||null,billing_city:customerForm.billing_city.trim()||null,billing_state:customerForm.billing_state.trim()||null,billing_pincode:customerForm.billing_pincode.trim()||null,place_of_supply:customerForm.place_of_supply.trim()||customerForm.billing_state.trim()||null,customer_state_code:customerForm.customer_state_code.trim()||gstState(customerForm.gstin),active:true};
