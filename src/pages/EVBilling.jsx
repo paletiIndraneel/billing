@@ -56,7 +56,8 @@ export default function EVBilling(){
  const toast=useToast(),[tab,setTab]=useState('invoices'),[customers,setCustomers]=useState([]),[inventory,setInventory]=useState([]),[invoices,setInvoices]=useState([]),[settings,setSettings]=useState(null);
  const [customer,setCustomer]=useState(''),[series,setSeries]=useState('GST-26/27'),[station,setStation]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState(''),[manualTax,setManualTax]=useState('CGST_SGST'),[items,setItems]=useState([]),[saving,setSaving]=useState(false);
  const [customerModal,setCustomerModal]=useState(false),[inventoryModal,setInventoryModal]=useState(false),[customerSaving,setCustomerSaving]=useState(false),[inventorySaving,setInventorySaving]=useState(false);
- const [customerForm,setCustomerForm]=useState({name:'',gstin:'',pan:'',billing_address_line1:'',billing_city:'',billing_state:'',billing_pincode:'',place_of_supply:'',customer_state_code:''});
+ const emptyCustomerForm={name:'',gstin:'',pan:'',billing_address_line1:'',billing_city:'',billing_state:'',billing_pincode:'',place_of_supply:'',customer_state_code:''};
+ const [customerForm,setCustomerForm]=useState(emptyCustomerForm);
  const [inventoryForm,setInventoryForm]=useState({product_name:'DC EV Charging',hsn:'996749',unit:'KWH',selling_price:'',gst_rate:'18',inventory_type:'electricity'});
  const load=async()=>{const [a,b,c,s]=await Promise.all([supabase.from('billing_customers').select('*').eq('active',true).order('name'),supabase.from('billing_invoices').select('*').order('invoice_date',{ascending:false}),supabase.from('inventory').select('*').eq('active',true).eq('inventory_type','electricity').order('product_name'),supabase.from('billing_settings').select('*').limit(1).maybeSingle()]);const e=[a,b,c,s].find(x=>x.error);if(e)throw e.error;setCustomers(a.data||[]);setInvoices(b.data||[]);setInventory(c.data||[]);setSettings(s.data)};
 
@@ -74,7 +75,7 @@ export default function EVBilling(){
    try{
      const payload={type:'business',name:customerForm.name.trim(),gstin:customerForm.gstin.trim()||null,pan:customerForm.pan.trim()||null,billing_address_line1:customerForm.billing_address_line1.trim()||null,billing_city:customerForm.billing_city.trim()||null,billing_state:customerForm.billing_state.trim()||null,billing_pincode:customerForm.billing_pincode.trim()||null,place_of_supply:customerForm.place_of_supply.trim()||customerForm.billing_state.trim()||null,customer_state_code:customerForm.customer_state_code.trim()||gstState(customerForm.gstin),active:true};
      const {data,error}=await supabase.from('billing_customers').insert(payload).select().single();if(error)throw error;
-     setCustomers(x=>[...x,data].sort((a,b)=>a.name.localeCompare(b.name)));setCustomer(data.id);setCustomerModal(false);setCustomerForm({name:'',gstin:'',pan:'',billing_address_line1:'',billing_city:'',billing_state:'',billing_pincode:'',place_of_supply:'',customer_state_code:''});toast.success('Customer added');
+     setCustomers(x=>[...x,data].sort((a,b)=>a.name.localeCompare(b.name)));setCustomer(data.id);setCustomerModal(false);setCustomerForm(emptyCustomerForm);toast.success('Customer added');
    }catch(e){toast.error(e.message||'Customer creation failed')}finally{setCustomerSaving(false)}
  };
 
@@ -124,8 +125,8 @@ export default function EVBilling(){
    <div style={{maxWidth:320,marginLeft:'auto',marginTop:16}}><div className="summary-row"><span>Taxable Amount</span><b>₹{money(total.taxable)}</b></div>{taxType==='IGST'?<div className="summary-row"><span>IGST</span><b>₹{money(total.igst)}</b></div>:<><div className="summary-row"><span>CGST</span><b>₹{money(total.cgst)}</b></div><div className="summary-row"><span>SGST</span><b>₹{money(total.sgst)}</b></div></>}<div className="summary-row"><span>Round Off</span><b>₹{money(total.round)}</b></div><div className="summary-row total"><span>Total</span><b>₹{money(total.total)}</b></div></div>
    <div style={{textAlign:'right',marginTop:16}}><button className="btn btn-primary" disabled={saving} onClick={save}>{saving?'Creating…':'Create EV Billing Invoice'}</button></div>
   </div>}
-  {customerModal&&<Modal title="Add Customer" onClose={()=>setCustomerModal(false)}><form onSubmit={addCustomer}><div className="form-grid modal-grid">
-    <label>Customer Name *<input autoFocus value={customerForm.name} onChange={e=>setCustomerForm({...customerForm,name:e.target.value})}/></label>
+  {customerModal&&<Modal title="Add Customer" onClose={()=>setCustomerModal(false)}><form onSubmit={addCustomer}><div className="customer-master-note">EV Billing Customer Master · Business customer</div><div className="form-grid modal-grid">
+    <label>Customer Name *<input autoFocus value={customerForm.name} onChange={e=>setCustomerForm({...customerForm,name:e.target.value})} placeholder="Customer / Company Name"/></label>
     <label>GSTIN<input maxLength="15" value={customerForm.gstin} onChange={e=>setCustomerForm({...customerForm,gstin:e.target.value.toUpperCase()})}/></label>
     <label>PAN<input maxLength="10" value={customerForm.pan} onChange={e=>setCustomerForm({...customerForm,pan:e.target.value.toUpperCase()})}/></label>
     <label>Billing Address<input value={customerForm.billing_address_line1} onChange={e=>setCustomerForm({...customerForm,billing_address_line1:e.target.value})}/></label>
@@ -133,7 +134,7 @@ export default function EVBilling(){
     <label>State<input value={customerForm.billing_state} onChange={e=>setCustomerForm({...customerForm,billing_state:e.target.value})}/></label>
     <label>Pincode<input value={customerForm.billing_pincode} onChange={e=>setCustomerForm({...customerForm,billing_pincode:e.target.value})}/></label>
     <label>Place of Supply<input value={customerForm.place_of_supply} onChange={e=>setCustomerForm({...customerForm,place_of_supply:e.target.value})} placeholder="Kerala"/></label>
-    <label>State Code<input maxLength="2" value={customerForm.customer_state_code} onChange={e=>setCustomerForm({...customerForm,customer_state_code:e.target.value.replace(/\D/g,'').slice(0,2)})} placeholder="32"/></label>
+    <label>State Code<input maxLength="2" value={customerForm.customer_state_code || gstState(customerForm.gstin) || ''} onChange={e=>setCustomerForm({...customerForm,customer_state_code:e.target.value.replace(/\D/g,'').slice(0,2)})} placeholder="Auto from GSTIN"/></label>
    </div><div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={()=>setCustomerModal(false)}>Cancel</button><button className="btn btn-primary" disabled={customerSaving}>{customerSaving?'Saving…':'Add Customer'}</button></div></form></Modal>}
   {inventoryModal&&<Modal title="Add Charging Item" onClose={()=>setInventoryModal(false)}><form onSubmit={addInventory}><div className="form-grid modal-grid">
     <label>Charging Service *<select autoFocus value={inventoryForm.product_name} onChange={e=>setInventoryForm({...inventoryForm,product_name:e.target.value})}><option value="DC EV Charging">DC EV Charging</option><option value="AC EV Charging">AC EV Charging</option></select></label>
