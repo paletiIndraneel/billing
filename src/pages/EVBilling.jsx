@@ -57,8 +57,8 @@ export default function EVBilling(){
  const [customer,setCustomer]=useState(''),[series,setSeries]=useState('GST-26/27'),[station,setStation]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState(''),[manualTax,setManualTax]=useState('CGST_SGST'),[items,setItems]=useState([]),[saving,setSaving]=useState(false);
  const [customerModal,setCustomerModal]=useState(false),[inventoryModal,setInventoryModal]=useState(false),[customerSaving,setCustomerSaving]=useState(false),[inventorySaving,setInventorySaving]=useState(false);
  const [customerForm,setCustomerForm]=useState({name:'',gstin:'',pan:'',billing_address_line1:'',billing_city:'',billing_state:'',billing_pincode:'',place_of_supply:'',customer_state_code:''});
- const [inventoryForm,setInventoryForm]=useState({product_name:'',hsn:'996749',unit:'KWH',selling_price:'',gst_rate:'18',inventory_type:'electricity'});
- const load=async()=>{const [a,b,c,s]=await Promise.all([supabase.from('billing_customers').select('*').eq('active',true).order('name'),supabase.from('billing_invoices').select('*').order('invoice_date',{ascending:false}),supabase.from('inventory').select('*').eq('active',true).order('product_name'),supabase.from('billing_settings').select('*').limit(1).maybeSingle()]);const e=[a,b,c,s].find(x=>x.error);if(e)throw e.error;setCustomers(a.data||[]);setInvoices(b.data||[]);setInventory(c.data||[]);setSettings(s.data)};
+ const [inventoryForm,setInventoryForm]=useState({product_name:'DC EV Charging',hsn:'996749',unit:'KWH',selling_price:'',gst_rate:'18',inventory_type:'electricity'});
+ const load=async()=>{const [a,b,c,s]=await Promise.all([supabase.from('billing_customers').select('*').eq('active',true).order('name'),supabase.from('billing_invoices').select('*').order('invoice_date',{ascending:false}),supabase.from('inventory').select('*').eq('active',true).eq('inventory_type','electricity').order('product_name'),supabase.from('billing_settings').select('*').limit(1).maybeSingle()]);const e=[a,b,c,s].find(x=>x.error);if(e)throw e.error;setCustomers(a.data||[]);setInvoices(b.data||[]);setInventory(c.data||[]);setSettings(s.data)};
 
  useEffect(()=>{load().catch(e=>toast.error(e.message))},[]);
 
@@ -87,7 +87,7 @@ export default function EVBilling(){
    try{
      const payload={product_name:inventoryForm.product_name.trim(),hsn:inventoryForm.hsn.trim()||null,unit:inventoryForm.unit.trim()||'KWH',selling_price:+inventoryForm.selling_price,gst_rate:+inventoryForm.gst_rate,inventory_type:'electricity',stock_tracked:false,active:true};
      const {data,error}=await supabase.from('inventory').insert(payload).select().single();if(error)throw error;
-     setInventory(x=>[...x,data].sort((a,b)=>a.product_name.localeCompare(b.product_name)));setInventoryModal(false);setInventoryForm({product_name:'',hsn:'996749',unit:'KWH',selling_price:'',gst_rate:'18',inventory_type:'electricity'});toast.success('Charging item added');
+     setInventory(x=>[...x,data].sort((a,b)=>a.product_name.localeCompare(b.product_name)));setInventoryModal(false);setInventoryForm({product_name:'DC EV Charging',hsn:'996749',unit:'KWH',selling_price:'',gst_rate:'18',inventory_type:'electricity'});toast.success('Charging item added');
      if(!items.length)setItems([{inventory_id:data.id,description:data.product_name,hsn:data.hsn||'',unit:data.unit||'KWH',quantity:1,unit_price:+data.selling_price||0,gst_rate:+data.gst_rate||0,discount_percent:0}]);
    }catch(e){toast.error(e.message||'Inventory item creation failed')}finally{setInventorySaving(false)}
  };
@@ -136,11 +136,11 @@ export default function EVBilling(){
     <label>State Code<input maxLength="2" value={customerForm.customer_state_code} onChange={e=>setCustomerForm({...customerForm,customer_state_code:e.target.value.replace(/\D/g,'').slice(0,2)})} placeholder="32"/></label>
    </div><div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={()=>setCustomerModal(false)}>Cancel</button><button className="btn btn-primary" disabled={customerSaving}>{customerSaving?'Saving…':'Add Customer'}</button></div></form></Modal>}
   {inventoryModal&&<Modal title="Add Charging Item" onClose={()=>setInventoryModal(false)}><form onSubmit={addInventory}><div className="form-grid modal-grid">
-    <label>Item Name *<input autoFocus value={inventoryForm.product_name} onChange={e=>setInventoryForm({...inventoryForm,product_name:e.target.value})} placeholder="DC EV Charging"/></label>
-    <label>HSN/SAC<input value={inventoryForm.hsn} onChange={e=>setInventoryForm({...inventoryForm,hsn:e.target.value})}/></label>
-    <label>Unit<select value={inventoryForm.unit} onChange={e=>setInventoryForm({...inventoryForm,unit:e.target.value})}><option value="KWH">KWH</option><option value="PCS">PCS</option><option value="HR">HR</option></select></label>
+    <label>Charging Service *<select autoFocus value={inventoryForm.product_name} onChange={e=>setInventoryForm({...inventoryForm,product_name:e.target.value})}><option value="DC EV Charging">DC EV Charging</option><option value="AC EV Charging">AC EV Charging</option></select></label>
+    <label>HSN/SAC<input value="996749" readOnly/></label>
+    <label>Unit<input value="KWH" readOnly/></label>
     <label>Rate per Unit *<input type="number" min="0" step="0.01" value={inventoryForm.selling_price} onChange={e=>setInventoryForm({...inventoryForm,selling_price:e.target.value})}/></label>
     <label>GST % *<input type="number" min="0" step="0.01" value={inventoryForm.gst_rate} onChange={e=>setInventoryForm({...inventoryForm,gst_rate:e.target.value})}/></label>
-   </div><p className="muted modal-note">The GST rate is saved with the inventory item and will be inherited automatically when billing.</p><div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={()=>setInventoryModal(false)}>Cancel</button><button className="btn btn-primary" disabled={inventorySaving}>{inventorySaving?'Saving…':'Add Item'}</button></div></form></Modal>}
+   </div><p className="muted modal-note">EV charging is billed in kWh. HSN/SAC 996749 and unit KWH are fixed for these charging services. The GST rate is saved with the service and inherited automatically when billing.</p><div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={()=>setInventoryModal(false)}>Cancel</button><button className="btn btn-primary" disabled={inventorySaving}>{inventorySaving?'Saving…':'Add Item'}</button></div></form></Modal>}
  </div>;
 }
