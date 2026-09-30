@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LogOut, FileText, Loader2 } from 'lucide-react';
 import EVBilling from './pages/EVBilling';
-import { supabase } from './lib/supabase';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { ToastProvider, useToast } from './components/Toast';
 
 function Login({ onLogin }) {
@@ -72,5 +72,6 @@ function AuthGate() {
 }
 
 export default function App() {
+  if (!isSupabaseConfigured) return <ToastProvider><div className="center"><div className="auth-card compact"><div className="brand-mark">T</div><h2>TRIARC GROUP</h2><p className="muted">Supabase configuration is missing.</p><p className="muted">Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel, then redeploy.</p></div></div></ToastProvider>;
   return <ToastProvider><AuthGate /></ToastProvider>;
 }
