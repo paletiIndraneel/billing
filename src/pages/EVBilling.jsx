@@ -172,7 +172,7 @@ export default function EVBilling(){
 <label style={{gridColumn:'1/-1'}}>Notes<textarea value={assetForm.notes} onChange={e=>setAssetForm({...assetForm,notes:e.target.value})} rows="3"/></label>
 </div><div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={()=>setAssetModal(false)}>Cancel</button><button className="btn btn-primary" disabled={assetSaving}>{assetSaving?'Saving…':editingAsset?'Save Changes':'Add Asset'}</button></div></form></Modal>}
   {inventoryModal&&<Modal title={editingInventory?"Edit Inventory Item":"Add Inventory Item"} onClose={()=>setInventoryModal(false)}><form onSubmit={addInventory}><div className="form-grid modal-grid">
-    <label>Item Name *<select autoFocus value={inventoryForm.product_name} onChange={e=>setInventoryForm({...inventoryForm,product_name:e.target.value})}><option value="DC EV Charging">DC EV Charging</option><option value="AC EV Charging">AC EV Charging</option></select></label>
+    <label>Item Name *<input autoFocus value={inventoryForm.product_name} onChange={e=>setInventoryForm({...inventoryForm,product_name:e.target.value})} placeholder="e.g. 60kW DC Charger"/></label>
     <label>SKU<input value={inventoryForm.sku} onChange={e=>setInventoryForm({...inventoryForm,sku:e.target.value})} placeholder="Optional"/></label>
     <label>Category<input value={inventoryForm.category} onChange={e=>setInventoryForm({...inventoryForm,category:e.target.value})}/></label>
     <label>Description<input value={inventoryForm.description} onChange={e=>setInventoryForm({...inventoryForm,description:e.target.value})}/></label>
