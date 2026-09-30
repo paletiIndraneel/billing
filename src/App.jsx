@@ -67,7 +67,7 @@ function AuthGate() {
 
   if (state === 'loading') return <div className="center"><Loader2 className="spin" size={28}/><span>Loading TRIARC GROUP…</span></div>;
   if (state === 'denied') return <div className="center"><div className="auth-card compact"><div className="brand-mark">T</div><h2>Admin access required</h2><p className="muted">Your account is not authorized to access EV Billing.</p><button className="btn btn-primary" onClick={()=>setState('login')}>Back to Login</button></div></div>;
-  if (state === 'login') return <Login onLogin={verify} />;
+  if (state === 'login') return <Login onLogin={(user) => verify({ user })} />;
   return <BillingApp user={user} onLogout={async()=>{ await supabase.auth.signOut(); }} />;
 }
 
