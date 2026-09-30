@@ -1,7 +1,6 @@
 import { HashRouter, BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, Package, Settings, LogOut, IndianRupee, Receipt, BarChart2, ShoppingCart, Sun, Moon, Menu, Truck } from 'lucide-react';
 import { resolveTheme, setTheme } from './lib/theme';
-import logo from './assets/Nexaura logo.png';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ToastProvider } from './components/Toast';
 import { LoadingProvider } from './components/LoadingOverlay';
@@ -36,7 +35,7 @@ function clearSession() {
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/crm', icon: Users, label: 'Customers & Vendors' },
-  { to: '/billing', icon: FileText, label: 'GST Billing' },
+  { to: '/billing', icon: FileText, label: 'EV Billing', adminOnly: true },
   { to: '/payments', icon: IndianRupee, label: 'Payments' },
   { to: '/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/purchases', icon: ShoppingCart, label: 'Purchases' },
@@ -49,13 +48,13 @@ const NAV_ITEMS = [
 function PageTitle() {
   const { pathname } = useLocation();
   const titles = {
-    '/': 'Dashboard', '/crm': 'Customers & Vendors', '/billing': 'GST Billing',
+    '/': 'Dashboard', '/crm': 'Customers & Vendors', '/billing': 'EV Billing',
     '/payments': 'Payments & Ledger', '/expenses': 'Expense Tracking',
     '/purchases': 'Purchase Management', '/orders': 'Orders & Shipment', '/inventory': 'Inventory & Stock',
     '/reports': 'GST Reports', '/settings': 'Settings',
   };
   if (pathname.startsWith('/ledger')) return 'Account Ledger';
-  return titles[pathname] || 'NEXAURA';
+  return titles[pathname] || 'TRIARC GROUP';
 }
 
 function useTheme() {
@@ -68,7 +67,7 @@ function useTheme() {
   return [theme, toggle];
 }
 
-function AppLayout({ user, onLogout }) {
+function AppLayout({ user, onLogout, isAdmin }) {
   const [theme, toggleTheme] = useTheme();
   const [navOpen, setNavOpen] = useState(false);
   const { pathname } = useLocation();
@@ -78,11 +77,11 @@ function AppLayout({ user, onLogout }) {
       {navOpen && <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} />}
       <aside className={`sidebar${navOpen ? ' sidebar--open' : ''}`}>
         <div className="sidebar-header">
-          <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }} />
-          NEXAURA
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>T</div>
+          TRIARC GROUP
         </div>
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
+          {NAV_ITEMS.filter(item => !item.adminOnly || isAdmin).map(({ to, icon: Icon, label, end }) => (
             <NavLink key={to} to={to} end={end}
               onClick={() => setNavOpen(false)}
               className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
@@ -129,7 +128,7 @@ function AppLayout({ user, onLogout }) {
           <Routes>
             <Route path="/" element={<ErrorBoundary key={pathname} label="Dashboard"><Dashboard /></ErrorBoundary>} />
             <Route path="/crm" element={<ErrorBoundary key={pathname} label="Customers & Vendors"><CRM /></ErrorBoundary>} />
-            <Route path="/billing" element={<ErrorBoundary key={pathname} label="GST Billing"><Billing /></ErrorBoundary>} />
+            <Route path="/billing" element={isAdmin ? <ErrorBoundary key={pathname} label="EV Billing"><Billing /></ErrorBoundary> : <Dashboard />} />
             <Route path="/payments" element={<ErrorBoundary key={pathname} label="Payments"><Payments /></ErrorBoundary>} />
             <Route path="/expenses" element={<ErrorBoundary key={pathname} label="Expenses"><Expenses /></ErrorBoundary>} />
             <Route path="/inventory" element={<ErrorBoundary key={pathname} label="Inventory"><Inventory /></ErrorBoundary>} />
@@ -145,9 +144,9 @@ function AppLayout({ user, onLogout }) {
   );
 }
 
-function AuthGate() {
+function AdminBillingGate({ children }) {\n  return children;\n}\n\nfunction AuthGate() {
   const [authState, setAuthState] = useState('loading');
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null);\n  const [isAdmin, setIsAdmin] = useState(false);
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -181,7 +180,7 @@ function AuthGate() {
             return;
           }
 
-          if (membership?.company_id) {
+          const { data: adminRow } = await supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).eq('active', true).maybeSingle();\n          setIsAdmin(!!adminRow);\n\n          if (membership?.company_id) {
             localStorage.setItem('lekhya_company_id', membership.company_id);
           }
 
@@ -213,7 +212,7 @@ function AuthGate() {
         <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <FileText size={24} />
         </div>
-        <span>Loading NEXAURA…</span>
+        <span>Loading TRIARC GROUP…</span>
       </div>
     );
   }
@@ -244,7 +243,7 @@ function AuthGate() {
           // from a known "/" instead of rendering under a stale pathname.
           window.history.replaceState(null, '', '/');
           qc.clear();
-          setUser({ id: u.id, username: u.username, email: u.email || '' });
+          setIsAdmin(false);\n          supabase.from('admin_users').select('user_id').eq('user_id', u.id).eq('active', true).maybeSingle().then(({data}) => setIsAdmin(!!data));\n          setUser({ id: u.id, username: u.username, email: u.email || '' });
           setAuthState('app');
           startRealtime(qc);
         }}
@@ -257,13 +256,13 @@ function AuthGate() {
     <HashRouter>
       <SubscriptionGate>
         <AppLayout
-          user={user}
+          user={user}\n          isAdmin={isAdmin}
           onLogout={async () => {
             window.history.replaceState(null, '', '/');
             stopRealtime();
             await supabase.auth.signOut().catch(() => {});
             clearSession();
-            setUser(null);
+            setUser(null);\n            setIsAdmin(false);
             setAuthState('landing');
           }}
         />
