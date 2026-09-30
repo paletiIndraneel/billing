@@ -144,9 +144,10 @@ function AppLayout({ user, onLogout, isAdmin }) {
   );
 }
 
-function AdminBillingGate({ children }) {\n  return children;\n}\n\nfunction AuthGate() {
+function AuthGate() {
   const [authState, setAuthState] = useState('loading');
-  const [user, setUser] = useState(null);\n  const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -180,7 +181,10 @@ function AdminBillingGate({ children }) {\n  return children;\n}\n\nfunction Aut
             return;
           }
 
-          const { data: adminRow } = await supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).eq('active', true).maybeSingle();\n          setIsAdmin(!!adminRow);\n\n          if (membership?.company_id) {
+          const { data: adminRow } = await supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).eq('active', true).maybeSingle();
+          setIsAdmin(!!adminRow);
+
+          if (membership?.company_id) {
             localStorage.setItem('lekhya_company_id', membership.company_id);
           }
 
@@ -243,7 +247,9 @@ function AdminBillingGate({ children }) {\n  return children;\n}\n\nfunction Aut
           // from a known "/" instead of rendering under a stale pathname.
           window.history.replaceState(null, '', '/');
           qc.clear();
-          setIsAdmin(false);\n          supabase.from('admin_users').select('user_id').eq('user_id', u.id).eq('active', true).maybeSingle().then(({data}) => setIsAdmin(!!data));\n          setUser({ id: u.id, username: u.username, email: u.email || '' });
+          setIsAdmin(false);
+          supabase.from('admin_users').select('user_id').eq('user_id', u.id).eq('active', true).maybeSingle().then(({data}) => setIsAdmin(!!data));
+          setUser({ id: u.id, username: u.username, email: u.email || '' });
           setAuthState('app');
           startRealtime(qc);
         }}
@@ -256,13 +262,15 @@ function AdminBillingGate({ children }) {\n  return children;\n}\n\nfunction Aut
     <HashRouter>
       <SubscriptionGate>
         <AppLayout
-          user={user}\n          isAdmin={isAdmin}
+          user={user}
+          isAdmin={isAdmin}
           onLogout={async () => {
             window.history.replaceState(null, '', '/');
             stopRealtime();
             await supabase.auth.signOut().catch(() => {});
             clearSession();
-            setUser(null);\n            setIsAdmin(false);
+            setUser(null);
+            setIsAdmin(false);
             setAuthState('landing');
           }}
         />
