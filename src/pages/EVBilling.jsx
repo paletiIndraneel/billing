@@ -26,8 +26,8 @@ function pdf(inv,items,cfg){
  const money2=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
  const money4=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:4,maximumFractionDigits:4});
  const safe=(v,f='')=>v===null||v===undefined||v===''?f:String(v);
- const company=inv.company_business_name?inv:{...inv,...(cfg||{})};
- const addr=[inv.company_address_line1,inv.company_address_line2,inv.company_city,inv.company_state,inv.company_pincode,inv.company_country||'India'].filter(Boolean).join(', ');
+ const company=inv.company_business_name?inv:(cfg||{});
+ const addr=[company.company_address_line1||company.address_line1,company.company_address_line2||company.address_line2,company.company_city||company.city,company.company_state||company.state,company.company_pincode||company.pincode,company.company_country||company.country||'India'].filter(Boolean).join(', ');
  const buyerAddr=[inv.billing_address_line1,inv.billing_address_line2,inv.billing_city,inv.billing_state,inv.billing_pincode,inv.billing_country||'India'].filter(Boolean).join(', ');
  const stateName=safe(inv.place_of_supply)||safe(inv.billing_state);
  const stateCode=safe(inv.place_of_supply_state_code);
@@ -63,12 +63,12 @@ function pdf(inv,items,cfg){
  const head=['Sl No.','Description of Services','GST Rate','Quantity (kWh)','Rate (Rs.)','per','Amount (Rs.)'];
  const body=items.map((x,i)=>[i+1,safe(x.description),(+x.gst_rate||0)+'%',(+x.quantity).toFixed(4),Number(x.unit_price||0).toFixed(4),'UNT',money2(x.taxable_amount)]);
  autoTable(d,{startY:110,margin:{left:L,right:10},head:[head],body,theme:'grid',styles:{fontSize:7.2,lineColor:[0,0,0],lineWidth:.25,cellPadding:1.5,valign:'middle'},headStyles:{fillColor:bg,textColor:[0,0,0],fontStyle:'bold',halign:'center'},columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:57},2:{cellWidth:17,halign:'center'},3:{cellWidth:28,halign:'right'},4:{cellWidth:24,halign:'right'},5:{cellWidth:12,halign:'center'},6:{cellWidth:40,halign:'right'}}});
- let y=d.lastAutoTable.finalY;
+ let y=d.lastAutoTable.finalY+6;
  const subtotal=Number(inv.taxable_amount||0), tax=Number(inv.total_tax||0), round=Number(inv.round_off||0);
- d.setFont('helvetica','bold');d.text('Sub Total (Taxable Value)',L+111,y+4);d.text(money2(subtotal),R-1,y+4,{align:'right'});
+ d.setFont('helvetica','bold');d.text('Sub Total (Taxable Value)',L+111,y);d.text(money2(subtotal),R-1,y,{align:'right'});
  y+=4.5;d.setFont('helvetica','normal');d.text(isIgst?'IGST Output A/c @ '+(items[0]?.gst_rate||0)+'%':'CGST + SGST',L+111,y);d.text(money2(isIgst?inv.igst_amount:(Number(inv.cgst_amount||0)+Number(inv.sgst_amount||0))),R-1,y,{align:'right'});
  y+=4.5;d.text('Rounding Off',L+111,y);d.text(money2(round),R-1,y,{align:'right'});
- y+=4.5;d.setFillColor(...bg);d.rect(L,y-2,W,7,'F');d.setFont('helvetica','bold');d.text('Total',L+92,y+2.5);d.text(money4(items.reduce((n,x)=>n+(+x.quantity||0),0)),L+111,y+2.5,{align:'right'});d.text('Rs. '+money2(inv.grand_total),R-1,y+2.5,{align:'right'});
+ y+=6;d.setFillColor(...bg);d.rect(L,y-3,W,8,'F');d.setFont('helvetica','bold');d.text('Total',L+92,y+2);d.text(money4(items.reduce((n,x)=>n+(+x.quantity||0),0)),L+111,y+2,{align:'right'});d.text('Rs. '+money2(inv.grand_total),R-1,y+2,{align:'right'});
  y+=9;d.setFont('helvetica','bold');d.text('Amount Chargeable (in words):',L+1,y);d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+49,y,{maxWidth:138});
  y+=7;d.setFillColor(...bg);d.rect(L,y-2,W,6,'F');d.setFont('helvetica','bold');d.text('Tax Analysis',105,y+2,{align:'center'});y+=5;
  const groups={};items.forEach(x=>{const k=x.hsn||'996749';if(!groups[k])groups[k]={taxable:0,gst:+x.gst_rate||0};groups[k].taxable+=+x.taxable_amount||0});
