@@ -22,7 +22,7 @@ function calc(items,type){
  return {rows,taxable,cgst,sgst,igst,tax,round,total:total+round};
 }
 function pdf(inv,items,cfg){
- const d=new jsPDF({unit:'mm',format:'a4'}),L=19,T=25.5,W=176,R=L+W,bg=[185,221,232];
+ const d=new jsPDF({unit:'mm',format:'a4'}),L=10,T=5,W=190,R=L+W,bg=[190,225,236];
  const money2=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
  const money4=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:4,maximumFractionDigits:4});
  const safe=(v,f='')=>v===null||v===undefined||v===''?f:String(v);
@@ -32,33 +32,32 @@ function pdf(inv,items,cfg){
  const stateName=safe(inv.place_of_supply)||safe(inv.billing_state), stateCode=safe(inv.place_of_supply_state_code);
  const isIgst=Number(inv.igst_amount||0)>0;
  d.setDrawColor(0);d.setLineWidth(.25);d.setTextColor(0,0,0);
- d.rect(L,T,W,225);
- d.setFillColor(...bg);d.rect(L,T,W,36,'F');
- d.setFont('helvetica','bold');d.setFontSize(9);d.text('Tax Invoice',105,29,{align:'center'});
- d.setFontSize(15);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,37,{align:'center'});
+ d.rect(L,T,W,289);
+ d.setFont('helvetica','bold');d.setFontSize(9);d.text('Tax Invoice',105,11,{align:'center'});
+ d.setFontSize(15);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,19,{align:'center'});
  d.setFont('helvetica','normal');d.setFontSize(7.3);
- if(addr)d.text(addr,105,43,{align:'center',maxWidth:168});
- d.text('GSTIN: '+(inv.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),105,53,{align:'center'});
- d.line(L,61.5,R,61.5);
- d.setFontSize(7.2);d.text('Contact: '+(inv.company_phone||cfg?.phone||'+91 7993356677'),L+1,65);
- if(inv.company_email||cfg?.email)d.text('E-Mail: '+(inv.company_email||cfg.email),L+101,65);
- d.line(L,67,R,67);d.line(129,67,129,113);
- d.setFont('helvetica','bold');d.text('Buyer (Bill to)',L+1,72);
- d.setFontSize(8.2);d.text(safe(inv.billing_name),L+1,78);
+ if(addr)d.text(addr,105,25,{align:'center',maxWidth:184});
+ d.text('GSTIN: '+(inv.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),105,32,{align:'center'});
+ d.line(L,37,R,37);
+ d.setFontSize(7.2);d.text('Contact: '+(inv.company_phone||cfg?.phone||'+91 7993356677'),L+1,41);
+ if(inv.company_email||cfg?.email)d.text('E-Mail: '+(inv.company_email||cfg.email),L+101,41);
+ d.line(L,44,R,44);d.line(119,44,119,89);
+ d.setFont('helvetica','bold');d.text('Buyer (Bill to)',L+1,49);
+ d.setFontSize(8.2);d.text(safe(inv.billing_name),L+1,55);
  d.setFont('helvetica','normal');d.setFontSize(7.1);
- if(buyerAddr)d.text(buyerAddr,L+1,83,{maxWidth:105});
- if(inv.billing_state)d.text('State Name: '+inv.billing_state+'  Code: '+safe(inv.billing_state_code||stateCode),L+1,98);
- if(inv.billing_gstin)d.text('GSTIN/UIN: '+inv.billing_gstin,L+1,104);
- d.text('Place of Supply: '+stateName,L+1,110);
- d.setFont('helvetica','bold');d.text('Invoice No:',130,72);d.setFont('helvetica','normal');d.text(safe(inv.invoice_number),149,72);
- d.setFont('helvetica','bold');d.text('Dated:',130,78);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),149,78);
- d.setFont('helvetica','bold');d.text('Mode/Terms of Payment:',130,86);
- d.line(L,113,R,113);
- d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Station:',L+1,118);d.setFont('helvetica','italic');d.text(safe(inv.station),L+18,118);
- d.setFont('helvetica','bold');d.text('Period:',129,118);d.setFont('helvetica','italic');d.text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),146,118);
- d.line(L,122,R,122);
+ if(buyerAddr)d.text(buyerAddr,L+1,60,{maxWidth:103});
+ if(inv.billing_state)d.text('State Name: '+inv.billing_state+'  Code: '+safe(inv.billing_state_code||stateCode),L+1,76);
+ if(inv.billing_gstin)d.text('GSTIN/UIN: '+inv.billing_gstin,L+1,82);
+ d.text('Place of Supply: '+stateName,L+1,88);
+ d.setFont('helvetica','bold');d.text('Invoice No :',120,49);d.setFont('helvetica','normal');d.text(safe(inv.invoice_number),141,49);
+ d.setFont('helvetica','bold');d.text('Dated :',120,55);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),141,55);
+ d.setFont('helvetica','bold');d.text('Mode/Terms of Payment:',120,62);
+ d.line(L,89,R,89);
+ d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Station:',L+1,94);d.setFont('helvetica','normal');d.text(safe(inv.station),L+18,94);
+ d.setFont('helvetica','bold');d.text('Period:',119,94);d.setFont('helvetica','normal');d.text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),136,94);
+ d.line(L,98,R,98);
  const body=items.map((x,i)=>[i+1,safe(x.description),(+x.gst_rate||0)+'%',(+x.quantity).toFixed(4),Number(x.unit_price||0).toFixed(4),'UNT',money2(x.taxable_amount)]);
- autoTable(d,{startY:127,margin:{left:L,right:15},tableWidth:W,head:[['Sl No.','Description of Services','GST Rate','Quantity (kWh)','Rate (Rs.)','per','Amount (Rs.)']],body,theme:'grid',styles:{fontSize:7.1,lineColor:[0,0,0],lineWidth:.25,cellPadding:1.5,valign:'middle',minCellHeight:9},headStyles:{fillColor:bg,textColor:[0,0,0],fontStyle:'bold',halign:'center'},columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:57},2:{cellWidth:17,halign:'center'},3:{cellWidth:23,halign:'right'},4:{cellWidth:24,halign:'right'},5:{cellWidth:12,halign:'center'},6:{cellWidth:31,halign:'right'}}});
+ autoTable(d,{startY:98,margin:{left:L,right:15},tableWidth:W,head:[['Sl No.','Description of Services','GST Rate','Quantity (kWh)','Rate (Rs.)','per','Amount (Rs.)']],body,theme:'grid',styles:{fontSize:7.1,lineColor:[0,0,0],lineWidth:.25,cellPadding:1.5,valign:'middle',minCellHeight:9},headStyles:{fillColor:bg,textColor:[0,0,0],fontStyle:'bold',halign:'center'},columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:57},2:{cellWidth:17,halign:'center'},3:{cellWidth:23,halign:'right'},4:{cellWidth:24,halign:'right'},5:{cellWidth:12,halign:'center'},6:{cellWidth:31,halign:'right'}}});
  let y=d.lastAutoTable.finalY;
  const subtotal=Number(inv.taxable_amount||0),tax=Number(inv.total_tax||0),round=Number(inv.round_off||0),qty=items.reduce((n,x)=>n+(+x.quantity||0),0);
  d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Sub Total (Taxable Value)',L+103,y+4);d.text(money2(subtotal),R-1,y+4,{align:'right'});
@@ -79,8 +78,8 @@ function pdf(inv,items,cfg){
  y+=5;d.line(L,y,R,y);y+=5;d.setFont('helvetica','bold');d.text('Declaration',L+1,y);d.setFont('helvetica','italic');d.setFontSize(7.1);d.text('We declare that this invoice shows the actual price of the services described and that all particulars are true and correct.',L+1,y+5,{maxWidth:165});
  d.setFont('helvetica','normal');d.text("Customer's Seal and Signature",L+1,249);
  d.setFont('helvetica','bold');d.text('for M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),R-1,249,{align:'right'});
- d.setFont('helvetica','normal');d.text('This is a Computer Generated Invoice',105,258,{align:'center'});
- d.setFont('helvetica','bold');d.text('Authorised Signatory',R-1,258,{align:'right'});
+ d.setFont('helvetica','normal');d.text('This is a Computer Generated Invoice',105,291,{align:'center'});
+ d.setFont('helvetica','bold');d.text('Authorised Signatory',R-1,291,{align:'right'});
  return d;
 }
 function Modal({title,children,onClose}){return <div className="modal-backdrop"><div className="modal-card"><div className="modal-header"><h3>{title}</h3><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>{children}</div></div>;}
