@@ -22,30 +22,52 @@ function calc(items,type){
  return {rows,taxable,cgst,sgst,igst,tax,round,total:total+round};
 }
 function pdf(inv,items,cfg){
- const d=new jsPDF({unit:'mm',format:'a4'}),L=10,W=190,bg=[220,237,247];
- d.rect(L,8,W,281);d.setFillColor(...bg);d.rect(L,8,W,13,'F');d.setFont('helvetica','bold');d.setFontSize(15);d.text('Tax Invoice',105,16.5,{align:'center'});
- d.setFontSize(11);d.text(cfg?.business_name||'M/S. TRIARC GROUP',L+3,28);d.setFont('helvetica','normal');d.setFontSize(8);
- d.text([cfg?.address_line1,cfg?.address_line2,cfg?.city,cfg?.state,cfg?.pincode].filter(Boolean).join(', '),L+3,33);
- d.text('GSTIN: '+(cfg?.gstin||'36AAYFT2036P1ZB'),L+3,38);d.text('Contact: '+(cfg?.phone||'+91 7993356677'),L+3,42);
- d.setFont('helvetica','bold');d.text('Invoice No.',130,28);d.setFont('helvetica','normal');d.text(inv.invoice_number,160,28);
- d.setFont('helvetica','bold');d.text('Date',130,33);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),160,33);
- d.setFont('helvetica','bold');d.text('Station',130,38);d.setFont('helvetica','normal');d.text(inv.station||'-',160,38);
- d.setFillColor(...bg);d.rect(L,47,W,7,'F');d.setFont('helvetica','bold');d.text('Buyer Details',L+3,52);
- d.setFontSize(8.5);d.text(inv.billing_name||'-',L+3,61);d.setFont('helvetica','normal');if(inv.billing_gstin)d.text('GSTIN: '+inv.billing_gstin,L+3,65.5);
- d.text([inv.billing_address_line1,inv.billing_address_line2,inv.billing_city,inv.billing_state,inv.billing_pincode].filter(Boolean).join(', '),L+3,70);
- d.setFont('helvetica','bold');d.text('Place of Supply:',125,61);d.setFont('helvetica','normal');d.text((inv.place_of_supply||'-')+(inv.place_of_supply_state_code?' ('+inv.place_of_supply_state_code+')':''),154,61);
- d.setFillColor(...bg);d.rect(L,76,W,7,'F');d.setFont('helvetica','bold');d.text('Billing Details',L+3,81);
- d.setFont('helvetica','normal');d.text('Station: '+(inv.station||'-'),L+3,89);d.text('Billing Period: '+fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),105,89);
- autoTable(d,{startY:93,margin:{left:L,right:10},head:[['Sr.','Description','HSN/SAC','Qty','Unit','Rate','GST%','Amount']],body:items.map((x,i)=>[i+1,x.description,x.hsn||'-',(+x.quantity).toFixed(3),x.unit||'PCS',money(x.unit_price),(+x.gst_rate||0)+'%',money(x.line_total)]),theme:'grid',styles:{fontSize:7.5,lineColor:[25,25,25],lineWidth:.25,cellPadding:2},headStyles:{fillColor:bg,textColor:[0,0,0]},columnStyles:{0:{cellWidth:9,halign:'center'},2:{cellWidth:18},3:{cellWidth:16,halign:'right'},4:{cellWidth:13},5:{cellWidth:23,halign:'right'},6:{cellWidth:15,halign:'center'},7:{cellWidth:27,halign:'right'}}});
- let y=d.lastAutoTable.finalY+5;d.setFont('helvetica','bold');d.setFontSize(8.5);d.text('Taxable Value',145,y);d.text(money(inv.taxable_amount),197,y,{align:'right'});y+=4.5;
- if(inv.igst_amount){d.text('IGST',145,y);d.text(money(inv.igst_amount),197,y,{align:'right'});y+=4.5}else{d.text('CGST',145,y);d.text(money(inv.cgst_amount),197,y,{align:'right'});y+=4.5;d.text('SGST',145,y);d.text(money(inv.sgst_amount),197,y,{align:'right'});y+=4.5}
- d.text('Round Off',145,y);d.text(money(inv.round_off),197,y,{align:'right'});y+=5;d.setFillColor(...bg);d.rect(137,y-1,60,8,'F');d.text('Total',145,y+4);d.text(money(inv.grand_total),197,y+4,{align:'right'});y+=13;
- d.setFontSize(8);d.text('Amount in Words:',L+3,y);d.setFont('helvetica','normal');d.text(words(inv.grand_total),L+35,y);y+=7;
+ const d=new jsPDF({unit:'mm',format:'a4'}),L=10,W=190,bg=[220,237,247],R=200;
+ const money2=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const safe=(v,f='-')=>v===null||v===undefined||v===''?f:String(v);
+ d.setDrawColor(25,25,25);d.setLineWidth(.25);d.rect(L,8,W,281);
+ d.setFillColor(...bg);d.rect(L,8,W,13,'F');
+ d.setFont('helvetica','bold');d.setFontSize(15);d.text('Tax Invoice',105,16.5,{align:'center'});
+ d.setFontSize(11);d.text(cfg?.business_name||'M/S. TRIARC GROUP',L+3,28);
+ d.setFont('helvetica','normal');d.setFontSize(7.5);
+ const addr=[cfg?.address_line1,cfg?.address_line2,cfg?.city,cfg?.state,cfg?.pincode].filter(Boolean).join(', ');
+ if(addr)d.text(addr,L+3,33,{maxWidth:108});
+ d.text('GSTIN: '+(cfg?.gstin||'36AAYFT2036P1ZB'),L+3,38);
+ d.text('Contact: '+(cfg?.phone||'+91 7993356677'),L+3,42);
+ if(cfg?.email)d.text('E-Mail: '+cfg.email,L+3,46);
+ d.setFont('helvetica','bold');d.text('Invoice No.',130,28);d.setFont('helvetica','normal');d.text(safe(inv.invoice_number),160,28);
+ d.setFont('helvetica','bold');d.text('Dated',130,33);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),160,33);
+ d.setFont('helvetica','bold');d.text('Station',130,38);d.setFont('helvetica','normal');d.text(safe(inv.station),160,38,{maxWidth:36});
+ d.setFillColor(...bg);d.rect(L,49,W,7,'F');d.setFont('helvetica','bold');d.text('Buyer (Bill to)',L+3,54);
+ d.setFontSize(8.5);d.text(safe(inv.billing_name),L+3,63);
+ d.setFont('helvetica','normal');d.setFontSize(7.5);
+ if(inv.billing_gstin)d.text('GSTIN: '+inv.billing_gstin,L+3,67.5);
+ const buyerAddr=[inv.billing_address_line1,inv.billing_address_line2,inv.billing_city,inv.billing_state,inv.billing_pincode,inv.billing_country||'India'].filter(Boolean).join(', ');
+ if(buyerAddr)d.text(buyerAddr,L+3,72,{maxWidth:105});
+ d.setFont('helvetica','bold');d.text('Place of Supply:',125,63);d.setFont('helvetica','normal');d.text(safe(inv.place_of_supply)+(inv.place_of_supply_state_code?' ('+inv.place_of_supply_state_code+')':''),154,63,{maxWidth:43});
+ d.setFillColor(...bg);d.rect(L,78,W,7,'F');d.setFont('helvetica','bold');d.text('Billing Details',L+3,83);
+ d.setFont('helvetica','normal');d.text('Station: '+safe(inv.station),L+3,91);
+ d.text('Period: '+fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),105,91);
+ autoTable(d,{startY:95,margin:{left:L,right:10},head:[['Sl No.','Description of Services','HSN/SAC','GST Rate','Quantity (kWh)','Rate (Rs.)','Amount (Rs.)']],body:items.map((x,i)=>[i+1,safe(x.description),safe(x.hsn),(+x.gst_rate||0)+'%',(+x.quantity).toFixed(4),money2(x.unit_price),money2(x.taxable_amount)]),theme:'grid',styles:{fontSize:7.2,lineColor:[25,25,25],lineWidth:.25,cellPadding:1.8,valign:'middle'},headStyles:{fillColor:bg,textColor:[0,0,0],fontStyle:'bold'},columnStyles:{0:{cellWidth:11,halign:'center'},1:{cellWidth:55},2:{cellWidth:22,halign:'center'},3:{cellWidth:19,halign:'center'},4:{cellWidth:28,halign:'right'},5:{cellWidth:26,halign:'right'},6:{cellWidth:29,halign:'right'}}});
+ let y=d.lastAutoTable.finalY+5;
+ d.setFont('helvetica','bold');d.setFontSize(8);
+ d.text('Sub Total (Taxable Value)',145,y);d.text(money2(inv.taxable_amount),R-3,y,{align:'right'});y+=4.5;
+ if(inv.igst_amount){d.text('IGST Output A/c @ '+(items[0]?.gst_rate||0)+'%',145,y);d.text(money2(inv.igst_amount),R-3,y,{align:'right'});y+=4.5}
+ else{d.text('CGST',145,y);d.text(money2(inv.cgst_amount),R-3,y,{align:'right'});y+=4.5;d.text('SGST',145,y);d.text(money2(inv.sgst_amount),R-3,y,{align:'right'});y+=4.5}
+ d.text('Rounding Off',145,y);d.text(money2(inv.round_off),R-3,y,{align:'right'});y+=5;
+ d.setFillColor(...bg);d.rect(137,y-1,60,8,'F');d.text('Total',145,y+4);d.text(money2(inv.grand_total),R-3,y+4,{align:'right'});y+=12;
+ d.setFontSize(7.5);d.text('Amount Chargeable (in words):',L+3,y);d.setFont('helvetica','normal');d.text(words(inv.grand_total),L+48,y,{maxWidth:138});y+=7;
  d.setFillColor(...bg);d.rect(L,y,W,7,'F');d.setFont('helvetica','bold');d.text('Tax Analysis',L+3,y+4.8);y+=7;
- const groups={};items.forEach(x=>{const k=x.hsn||'-';groups[k]??={taxable:0,gst:+x.gst_rate||0};groups[k].taxable+=+x.taxable_amount||0});
+ const groups={};items.forEach(x=>{const k=x.hsn||'-';if(!groups[k])groups[k]={taxable:0,gst:+x.gst_rate||0};groups[k].taxable+=+x.taxable_amount||0});
  const ig=!!inv.igst_amount;
- autoTable(d,{startY:y,margin:{left:L,right:10},head:[['HSN/SAC','Taxable Value','GST Rate','CGST','SGST','IGST','Total Tax']],body:Object.entries(groups).map(([h,g])=>{const tx=g.taxable*g.gst/100;return[h,money(g.taxable),g.gst+'%',ig?'-':money(tx/2),ig?'-':money(tx/2),ig?money(tx):'-',money(tx)]}),theme:'grid',styles:{fontSize:7.2,lineColor:[25,25,25],lineWidth:.25},headStyles:{fillColor:bg,textColor:[0,0,0]}});
- y=d.lastAutoTable.finalY+7;d.setFont('helvetica','bold');d.text('Declaration',L+3,y);d.setFont('helvetica','normal');d.setFontSize(7.5);d.text('This is a computer generated invoice. All particulars are as stated above.',L+3,y+4.5);d.setFont('helvetica','bold');d.text('Authorised Signatory',165,y+18,{align:'center'});d.setFontSize(7);d.setFont('helvetica','normal');d.text('This is a Computer Generated Invoice',105,285,{align:'center'});return d;
+ autoTable(d,{startY:y,margin:{left:L,right:10},head:[['HSN/SAC','Taxable Value','GST Rate','CGST','SGST','IGST','Total Tax Amount']],body:Object.entries(groups).map(([h,g])=>{const tx=g.taxable*g.gst/100;return[h,money2(g.taxable),g.gst+'%',ig?'-':money2(tx/2),ig?'-':money2(tx/2),ig?money2(tx):'-',money2(tx)]}),theme:'grid',styles:{fontSize:7,lineColor:[25,25,25],lineWidth:.25,cellPadding:1.7},headStyles:{fillColor:bg,textColor:[0,0,0],fontStyle:'bold'}});
+ y=d.lastAutoTable.finalY+6;d.setFont('helvetica','bold');d.setFontSize(8);d.text('Tax Amount (in words):',L+3,y);d.setFont('helvetica','normal');d.text(words(inv.total_tax),L+38,y,{maxWidth:150});y+=9;
+ d.setFont('helvetica','bold');d.text('Declaration',L+3,y);d.setFont('helvetica','normal');d.setFontSize(7.2);d.text('We declare that this invoice shows the actual price of the services described and that all particulars are true and correct.',L+3,y+4.5,{maxWidth:118});
+ d.setFont('helvetica','bold');d.text('for '+(cfg?.business_name||'M/S. TRIARC GROUP'),165,y+4.5,{align:'center',maxWidth:45});
+ d.setFont('helvetica','normal');d.text('Customer Seal and Signature',50,y+22,{align:'center'});
+ d.setFont('helvetica','bold');d.text('Authorised Signatory',165,y+22,{align:'center'});
+ d.setFontSize(7);d.text('This is a Computer Generated Invoice',105,285,{align:'center'});
+ return d;
 }
 function Modal({title,children,onClose}){return <div className="modal-backdrop"><div className="modal-card"><div className="modal-header"><h3>{title}</h3><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>{children}</div></div>;}
 
