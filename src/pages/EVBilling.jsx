@@ -32,7 +32,7 @@ function pdf(inv,items,cfg){
  const stateName=safe(inv.place_of_supply)||safe(inv.billing_state), stateCode=safe(inv.place_of_supply_state_code);
  const isIgst=Number(inv.igst_amount||0)>0;
  d.setDrawColor(0);d.setLineWidth(.25);d.setTextColor(0,0,0);
- d.setFillColor(...bg);d.rect(L,T,W,39,'F');
+ d.setFillColor(...bg);d.rect(L,T,W,32,'F');
  d.rect(L,T,W,289);
  d.setFont('helvetica','bold');d.setFontSize(9);d.text('Tax Invoice',105,11,{align:'center'});
  d.setFontSize(15);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,19,{align:'center'});
@@ -82,10 +82,10 @@ function pdf(inv,items,cfg){
  }
  y=d.lastAutoTable.finalY+5;d.setFont('helvetica','bold');d.text('Tax Amount (in words):',L+1,y);d.setFont('helvetica','normal');d.text(words(tax),L+39,y,{maxWidth:136});
  y+=5;d.line(L,y,R,y);y+=5;d.setFont('helvetica','bold');d.text('Declaration',L+1,y);d.setFont('helvetica','italic');d.setFontSize(7.1);d.text('We declare that this invoice shows the actual price of the services described and that all particulars are true and correct.',L+1,y+5,{maxWidth:165});
- d.setFont('helvetica','normal');d.text("Customer's Seal and Signature",L+1,249);
- d.setFont('helvetica','bold');d.text('for M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),R-1,249,{align:'right'});
- d.setFont('helvetica','normal');d.text('This is a Computer Generated Invoice',105,291,{align:'center'});
- d.setFont('helvetica','bold');d.text('Authorised Signatory',R-1,291,{align:'right'});
+ d.setFont('helvetica','normal');d.setFontSize(7.1);d.text("Customer's Seal and Signature",L+1,249);
+ d.setFont('helvetica','bold');d.setFontSize(7.1);d.text('for M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),R-1,249,{align:'right'});
+ d.setFont('helvetica','normal');d.setFontSize(7.1);d.text('This is a Computer Generated Invoice',105,291,{align:'center'});
+ d.setFont('helvetica','bold');d.setFontSize(7.1);d.text('Authorised Signatory',R-1,291,{align:'right'});
  return d;
 }
 function Modal({title,children,onClose}){return <div className="modal-backdrop"><div className="modal-card"><div className="modal-header"><h3>{title}</h3><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>{children}</div></div>;}
