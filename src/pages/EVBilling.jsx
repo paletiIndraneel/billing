@@ -37,9 +37,9 @@ function pdf(inv,items,cfg){
  d.setFontSize(15);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,19,{align:'center'});
  d.setFont('helvetica','normal');d.setFontSize(7.3);
  if(addr)d.text(addr,105,25,{align:'center',maxWidth:184});
- d.text('GSTIN: '+(inv.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),105,32,{align:'center'});
+ d.setFont('helvetica','bold');d.setFontSize(7.3);d.text('GSTIN: '+(inv.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),105,32,{align:'center'});
  d.line(L,37,R,37);
- d.setFontSize(7.2);d.text('Contact: '+(inv.company_phone||cfg?.phone||'+91 7993356677'),L+1,41);
+ d.setFont('helvetica','normal');d.setFontSize(7.2);d.text('Contact: '+(inv.company_phone||cfg?.phone||'+91 7993356677'),L+1,41);
  if(inv.company_email||cfg?.email)d.text('E-Mail: '+(inv.company_email||cfg.email),L+101,41);
  d.line(L,44,R,44);d.line(119,44,119,89);
  d.setFont('helvetica','bold');d.text('Buyer (Bill to)',L+1,49);
@@ -53,7 +53,7 @@ function pdf(inv,items,cfg){
  d.setFont('helvetica','bold');d.text('Dated :',120,55);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),141,55);
  d.setFont('helvetica','bold');d.text('Mode/Terms of Payment:',120,62);
  d.line(L,89,R,89);
- d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Station:',L+1,94);d.setFont('helvetica','normal');d.text(safe(inv.station),L+18,94);
+ d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Station:',L+1,94);d.setFont('helvetica','italic');d.text(safe(inv.station),L+18,94);
  d.setFont('helvetica','bold');d.text('Period:',119,94);d.setFont('helvetica','normal');d.text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),136,94);
  d.line(L,98,R,98);
  const body=items.map((x,i)=>[i+1,safe(x.description),(+x.gst_rate||0)+'%',(+x.quantity).toFixed(4),Number(x.unit_price||0).toFixed(4),'UNT',money2(x.taxable_amount)]);
