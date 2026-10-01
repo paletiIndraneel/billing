@@ -78,8 +78,8 @@ function pdf(inv,items,cfg){
 
  y+=24;d.setFillColor(...bg);d.rect(L,y,W,7,'F');d.setFont('helvetica','bold');d.text('Total',L+39,y+4.8);d.text(money4(qty),L+101,y+4.8,{align:'right'});d.text('Rs. '+money2(inv.grand_total),R-1,y+4.8,{align:'right'});d.line(L,y,R,y);d.line(L,y+7,R,y+7);d.line(amountX,y,amountX,y+7);
 
- y+=9;d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Amount Chargeable (in words):',L+1,y);d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+48,y,{maxWidth:132});
- y+=7;d.setFillColor(...bg);d.rect(L,y-2,W,6,'F');d.setFont('helvetica','bold');d.text('Tax Analysis',105,y+2,{align:'center'});y+=5;
+ y+=8;d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Amount Chargeable (in words):',L+1,y);d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+48,y,{maxWidth:132});
+ y+=6;d.setDrawColor(0);d.line(L,y,R,y);y+=5;d.setFillColor(...bg);d.rect(L,y-2,W,6,'F');d.setFont('helvetica','bold');d.text('Tax Analysis',105,y+2,{align:'center'});y+=5;
 
  const groups={};items.forEach(x=>{const k=x.hsn||'996749';if(!groups[k])groups[k]={taxable:0,gst:+x.gst_rate||0};groups[k].taxable+=+x.taxable_amount||0});
  if(isIgst){
