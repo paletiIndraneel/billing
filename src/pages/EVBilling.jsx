@@ -32,7 +32,6 @@ function pdf(inv,items,cfg){
  const stateName=safe(inv.place_of_supply)||safe(inv.billing_state), stateCode=safe(inv.place_of_supply_state_code);
  const isIgst=Number(inv.igst_amount||0)>0;
  d.setDrawColor(0);d.setLineWidth(.25);d.setTextColor(0,0,0);
- d.setFillColor(...bg);d.rect(L,T,W,32,'F');
  d.rect(L,T,W,289);
  d.setFont('helvetica','bold');d.setFontSize(9);d.text('Tax Invoice',105,11,{align:'center'});
  d.setFontSize(15);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,19,{align:'center'});
