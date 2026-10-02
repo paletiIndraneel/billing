@@ -180,7 +180,7 @@ function pdf(inv,items,cfg){
   line();
   // Center the heading within the Tax Analysis header row itself,
   // using the row's top and bottom boundaries rather than a fixed offset.
-  center('Tax Analysis',L,R,y[25]+rowH[25]/2+3.0,9,true);
+  center('Tax Analysis',L,R,y[25]+rowH[25]/2+2.0,9,true);
   for(let r=26;r<=28;r++)hline(r);
   const txCols=isIgst ? [L,x[2],x[3],x[4],x[6],R] : [L,x[2],x[3],x[4],x[5],x[6],R];
   txCols.forEach(xx=>d.line(xx,y[26],xx,y[28]+rowH[28]));
