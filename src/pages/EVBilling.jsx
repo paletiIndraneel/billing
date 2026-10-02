@@ -82,13 +82,15 @@ function pdf(inv,items,cfg){
   left('Place of Supply: '+stateName,L,y[13]+4.6,7.6);
   left('Station: '+safe(inv.station),L,y[14]+5.0,8.5);
 
-  left('Invoice Period :',x[5],y[6]+5.0,8.5,true);
-  center(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[6],R,y[6]+5.0,8.0);
-  left('Invoice No :',x[5],y[8]+5.0,8.5,true);
-  center(inv.invoice_number,x[6],R,y[8]+5.0,8.0);
-  left('Dated :',x[5],y[9]+5.0,8.5,true);
-  center(fmtDate(inv.invoice_date),x[6],R,y[9]+5.0,8.0);
-  left('Mode/Terms of Payment:',x[5],y[10]+5.0,8.0,false);
+  // Metadata is a narrow right-hand block in the reference. Keep labels and values
+  // separated so the long invoice-period value never overlaps its label.
+  left('Invoice Period :',x[5],y[6]+4.8,7.3,true);
+  right(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[5]+19,R,y[6]+4.8,6.5);
+  left('Invoice No :',x[5],y[8]+5.0,8.2,true);
+  right(inv.invoice_number,x[6]-1,R,y[8]+5.0,7.5);
+  left('Dated :',x[5],y[9]+5.0,8.2,true);
+  right(fmtDate(inv.invoice_date),x[6]-1,R,y[9]+5.0,7.5);
+  left('Mode/Terms of Payment:',x[5],y[10]+5.0,7.2,false);
 
   // Service table A15:G18. The Excel template has exactly three service rows.
   d.setFillColor(...BLUE);d.rect(L,y[15],W,rowH[15],'F');
