@@ -50,7 +50,9 @@ function pdf(inv,items,cfg){
   let yy=TOP;
   for(let r=1;r<=37;r++){y[r]=yy;yy+=rowH[r];}
   const bottom=y[37]+rowH[37];
-  // Excel A:G column widths scaled to the 190 mm invoice frame.\n  const cw=[11,31,11.86,12.86,16.57,10.43,19], scale=W/cw.reduce((a,b)=>a+b,0), x=[L];\n  cw.forEach(w=>x.push(x[x.length-1]+w*scale));
+  // Excel A:G column widths scaled to the 190 mm invoice frame.
+  const cw=[11,31,11.86,12.86,16.57,10.43,19], scale=W/cw.reduce((a,b)=>a+b,0), x=[L];
+  cw.forEach(w=>x.push(x[x.length-1]+w*scale));
   const line=()=>{d.setDrawColor(0);d.setLineWidth(.25);};
   const rect=(x1,y1,x2,y2)=>d.rect(x1,y1,x2-x1,y2-y1);
   const hline=(r)=>d.line(L,y[r]+rowH[r],R,y[r]+rowH[r]);
