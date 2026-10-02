@@ -54,10 +54,10 @@ function pdf(inv,items,cfg){
   if(inv.billing_state)d.text('State Name: '+inv.billing_state+'  Code: '+safe(inv.billing_state_code||stateCode),L+1,76);
   if(inv.billing_gstin)d.text('GSTIN/UIN: '+inv.billing_gstin,L+1,82);
   d.text('Place of Supply: '+stateName,L+1,88);
-  d.setFont('helvetica','bold');d.text('Invoice No :',120,49);d.setFont('helvetica','normal');d.text(safe(inv.invoice_number),141,49);
-  d.setFont('helvetica','bold');d.text('Dated :',120,55);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),141,55);
-  d.setFont('helvetica','bold');d.text('Mode/Terms of Payment:',120,62);
-  d.setFont('helvetica','bold');d.text('Invoice Period :',120,69);d.setFont('helvetica','normal');d.text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),145,69);
+  d.setFont('helvetica','bold');d.text('Invoice Period :',120,49);d.setFont('helvetica','normal');d.text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),145,49);
+  d.setFont('helvetica','bold');d.text('Invoice No :',120,55);d.setFont('helvetica','normal');d.text(safe(inv.invoice_number),141,55);
+  d.setFont('helvetica','bold');d.text('Dated :',120,61);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),141,61);
+  d.setFont('helvetica','bold');d.text('Mode/Terms of Payment:',120,68);
   d.line(L,89,R,89);
   d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Station:',L+1,94);
   d.setFont('helvetica','italic');d.text(safe(inv.station),L+18,94);
@@ -126,10 +126,10 @@ function pdf(inv,items,cfg){
  d.line(L,y,R,y);d.line(L,y+7,R,y+7);d.line(amountX,y,amountX,y+7);
 
  // Amount in words.
- y+=12;
+ y+=8;
  d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Amount Chargeable (in words):',L+1,y);
- d.setFont('helvetica','normal');d.text(words(inv.grand_total),L+48,y,{maxWidth:140});
- y+=5;d.line(L,y,R,y);
+ d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+48,y,{maxWidth:140});
+ y+=6;d.line(L,y,R,y);
 
  // Tax analysis heading.
  y+=5;d.setFillColor(...BLUE);d.rect(L,y-2,W,6,'F');
