@@ -60,8 +60,12 @@ function pdf(inv,items,cfg){
   const right=(txt,x1,x2,yy,size=8,bold=false)=>{d.setFont('helvetica',bold?'bold':'normal');d.setFontSize(size);d.text(safe(txt),x2-1,yy,{align:'right'});};
   const left=(txt,x1,yy,size=8,bold=false,maxWidth)=>{d.setFont('helvetica',bold?'bold':'normal');d.setFontSize(size);d.text(safe(txt),x1+1,yy,maxWidth?{maxWidth}:undefined);};
 
+  // Outer invoice frame: one continuous, uniform border on all four sides.
+  d.setDrawColor(0);
+  d.setLineWidth(0.5);
+  d.rect(L,TOP,W,bottom-TOP);
+  // Restore the standard thinner weight for internal table/divider lines.
   line();
-  rect(L,TOP,R,bottom);
 
   // Header A1:G5
   d.setTextColor(255,0,0); center('Tax Invoice',L,R,y[1]+6.8,12,true); d.setTextColor(0,0,0);
