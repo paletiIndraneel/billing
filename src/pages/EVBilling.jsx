@@ -95,7 +95,7 @@ function pdf(inv,items,cfg){
  let y=d.lastAutoTable.finalY;
  const subtotal=Number(inv.taxable_amount||0),round=Number(inv.round_off||0);
  const tax=Number(inv.total_tax||0),qty=items.reduce((n,x)=>n+(+x.quantity||0),0);
- const amountX=169.5;
+ const amountX=159.5,C3=91,C4=114.5;
 
  // If the service table reached a new page, keep the summary together.
  if(y+31>PAGE_BOTTOM-4){d.addPage();border();y=10;}
@@ -122,14 +122,14 @@ function pdf(inv,items,cfg){
  y+=24;
  d.setFillColor(...BLUE);d.rect(L,y,W,7,'F');
  d.setTextColor(0,0,0);d.setFont('helvetica','bold');d.setFontSize(7.5);
- d.text('Total',55.6,y+4.8,{align:'center'});
- d.text(money4(qty),113.3,y+4.8,{align:'center'});
+ d.text('Total',(L+C3)/2,y+4.8,{align:'center'});
+ d.text(money4(qty),(C3+C4)/2,y+4.8,{align:'center'});
  d.text('Rs. '+money2(inv.grand_total),R-1,y+4.8,{align:'right'});
  // Total row divisions match the reference: merged label, quantity, rate/unit, amount.
  d.line(L,y,R,y);d.line(L,y+7,R,y+7);
- d.line(101.2,y,101.2,y+7);
- d.line(125.3,y,125.3,y+7);
- d.line(169.5,y,169.5,y+7);
+ d.line(C3,y,C3,y+7);
+ d.line(C4,y,C4,y+7);
+ d.line(amountX,y,amountX,y+7);
 
  // Amount in words — kept on its own row, immediately below Total, matching the reference.
  y+=14;
