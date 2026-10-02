@@ -103,20 +103,25 @@ function pdf(inv,items,cfg){
  if(y+31>PAGE_BOTTOM-4){d.addPage();border();y=10;}
  d.setDrawColor(0);d.setTextColor(0,0,0);d.setLineWidth(.25);
 
- // Totals block — horizontal rules and right amount divider exactly define the block.
+ // Totals block — explicit grid lines matching the Excel reference.
+ d.setDrawColor(0);d.setLineWidth(.35);
+ // Outer top/bottom lines and the vertical amount column.
  d.line(L,y,R,y);
+ d.line(L,y+24,R,y+24);
  d.line(amountX,y,amountX,y+24);
+ // Horizontal separators between Sub Total, GST and Rounding Off.
+ d.line(L,y+8,R,y+8);
+ d.line(L,y+16,R,y+16);
  d.setFont('helvetica','bold');d.setFontSize(7.5);
  d.text('Sub Total (Taxable Value)',amountX-2,y+5.2,{align:'right'});
  d.text(money2(subtotal),R-1,y+5.2,{align:'right'});
- d.line(L,y+8,R,y+8);
  d.setFont('helvetica','normal');
  d.text(isIgst?'IGST Output A/c @ '+(items[0]?.gst_rate||0)+'%':'CGST + SGST',amountX-2,y+13.2,{align:'right'});
  d.text(money2(isIgst?inv.igst_amount:(Number(inv.cgst_amount||0)+Number(inv.sgst_amount||0))),R-1,y+13.2,{align:'right'});
- d.line(L,y+16,R,y+16);
  d.text('Rounding Off',amountX-2,y+21.2,{align:'right'});
  d.text(money2(round),R-1,y+21.2,{align:'right'});
- d.line(L,y+24,R,y+24);
+ // Restore the normal PDF line weight for following sections.
+ d.setLineWidth(.25);
 
  // Total row.
  y+=24;
