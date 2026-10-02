@@ -45,7 +45,7 @@ function pdf(inv,items,cfg){
   const isIgst=Number(inv.igst_amount||0)>0;
   const BLUE=[182,221,232];
   const L=10,TOP=5,W=190,R=L+W;
-  const rowH={1:10,2:7,3:11,4:6,5:7,6:7,7:7,8:7,9:7,10:7,11:6.5,12:6.5,13:6.5,14:7,15:8,16:8,17:8,18:8,19:7,20:7,21:7,22:8,23:10,24:5,25:7,26:7,27:7,28:7,29:9,30:5,31:7,32:11,33:8,34:8,35:10,36:8,37:8};
+  const rowH={1:10,2:7,3:11,4:6,5:7,6:7,7:7,8:7,9:7,10:7,11:6.5,12:6.5,13:6.5,14:7,15:8,16:8,17:8,18:8,19:7,20:7,21:7,22:8,23:10,24:5,25:5,26:7,27:7,28:7,29:9,30:5,31:7,32:11,33:8,34:8,35:10,36:8,37:8};
   const y={};
   let yy=TOP;
   for(let r=1;r<=37;r++){y[r]=yy;yy+=rowH[r];}
@@ -168,8 +168,9 @@ function pdf(inv,items,cfg){
   left('Amount Chargeable (in words): '+words(inv.grand_total)+' (E. & O.E.)',L,y[23]+6.2,7.5,true,R-L-2);
 
   // Tax analysis A25:G29.
-  d.setFillColor(...BLUE);d.rect(L+0.25,y[25],W-0.5,rowH[25],'F');
-  center('Tax Analysis',L,R,y[25]+4.8,9,true);
+  d.setFillColor(...BLUE);d.rect(L+0.25,y[25]+0.25,W-0.5,rowH[25]-0.5,'F');
+  d.setDrawColor(0);d.setLineWidth(0.5);d.line(L,y[25],R,y[25]);d.line(L,y[25]+rowH[25],R,y[25]+rowH[25]);line();
+  center('Tax Analysis',L,R,y[25]+3.6,8.5,true);
   for(let r=26;r<=28;r++)hline(r);
   const txCols=isIgst ? [L,x[2],x[3],x[4],x[6],R] : [L,x[2],x[3],x[4],x[5],x[6],R];
   txCols.forEach(xx=>d.line(xx,y[26],xx,y[28]+rowH[28]));
