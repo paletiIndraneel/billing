@@ -165,9 +165,12 @@ function pdf(inv,items,cfg){
   // Reference Total row: the divider between Total and Amount aligns
   // exactly with the GST Rate / Quantity divider in the service header.
   d.line(x[3],y[22],x[3],y[22]+rowH[22]);
+  // The line after Total quantity aligns with the service-table
+  // Quantity (kWh) / Rate (Rs.) divider.
+  d.line(x[4],y[22],x[4],y[22]+rowH[22]);
   center('Total',L,x[3],y[22]+5.3,8,true);
   right(money4(rows.reduce((n,r)=>n+(+r.quantity||0),0)),x[3],x[4],y[22]+5.3,7.5,true);
-  right('Rs. '+money2(inv.grand_total),x[3],R,y[22]+5.3,8,true);
+  right('Rs. '+money2(inv.grand_total),x[4],R,y[22]+5.3,8,true);
 
   left('Amount Chargeable (in words): '+words(inv.grand_total)+' (E. & O.E.)',L,y[23]+6.2,7.5,true,R-L-2);
 
