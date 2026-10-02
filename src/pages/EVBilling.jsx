@@ -114,9 +114,10 @@ function pdf(inv,items,cfg){
     right(item.taxable_amount===undefined?'':money2(item.taxable_amount),x[6],x[7],y[r]+5.2,7.2);
   }
 
-  // Summary rows A19:G23.
-  for(let r=19;r<=21;r++){d.line(L,y[r],R,y[r]);}
-  d.line(L,y[21]+rowH[21],R,y[21]+rowH[21]);
+  // Summary rows A19:G23. The reference has no horizontal separators
+  // through the label area; only the amount/value column is divided.
+  for(let r=19;r<=21;r++){d.line(x[6],y[r],R,y[r]);}
+  d.line(x[6],y[21]+rowH[21],R,y[21]+rowH[21]);
   d.line(x[6],y[19],x[6],y[21]+rowH[21]);
   [19,20,21].forEach(r=>right(
     r===19?'Sub Total (Taxable Value)':r===20?(isIgst?'IGST Output A/c @ '+(rows[0]?.gst_rate||0)+'%':'CGST + SGST'):'Rounding Off',
