@@ -126,9 +126,9 @@ function pdf(inv,items,cfg){
  d.line(L,y,R,y);d.line(L,y+7,R,y+7);d.line(amountX,y,amountX,y+7);
 
  // Amount in words.
- y+=8;
+ y+=10;
  d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Amount Chargeable (in words):',L+1,y);
- d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+48,y,{maxWidth:140});
+ d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+58,y,{maxWidth:130});
  y+=6;d.line(L,y,R,y);
 
  // Tax analysis heading.
