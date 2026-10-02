@@ -83,8 +83,19 @@ function pdf(inv,items,cfg){
   left('Buyer (Bill to)',L,y[6]+5.0,9,true);
   left(inv.billing_name,L,y[7]+5.0,8.5);
   if(buyerAddr){
-    const lines=d.splitTextToSize(buyerAddr, x[5]-L-3);
-    lines.slice(0,3).forEach((t,i)=>left(t,L,y[8]+4.5+i*4.3,7.6));
+    // Keep the address inside the three address rows (8-10) without truncating it.
+    // For longer addresses, progressively reduce the font size so all wrapped
+    // lines remain visible before the State/GSTIN rows begin.
+    const maxW=x[5]-L-3;
+    let addressSize=7.6;
+    let lines=d.splitTextToSize(buyerAddr,maxW);
+    while(lines.length>3 && addressSize>5.8){
+      addressSize-=0.3;
+      d.setFont('helvetica','normal');
+      d.setFontSize(addressSize);
+      lines=d.splitTextToSize(buyerAddr,maxW);
+    }
+    lines.slice(0,3).forEach((t,i)=>left(t,L,y[8]+4.5+i*4.3,addressSize));
   }
   left('State Name: '+safe(inv.billing_state)+'   Code: '+stateCode,L,y[11]+4.6,7.6);
   left('GSTIN/UIN: '+safe(inv.billing_gstin),L,y[12]+4.6,7.6);
