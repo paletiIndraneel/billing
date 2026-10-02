@@ -46,7 +46,7 @@ function pdf(inv,items,cfg){
   d.setFont('helvetica','normal');d.setFontSize(8);
   d.text('Contact: '+(inv.company_phone||cfg?.phone||'+91 7993356677'),L+1,41);
   if(inv.company_email||cfg?.email)d.text('E-Mail: '+(inv.company_email||cfg.email),L+101,41);
-  d.line(L,44,R,44);d.line(119,44,119,89);
+  d.line(L,44,R,44);d.line(125,44,125,89);
   d.setFont('helvetica','bold');d.setFontSize(9);d.text('Buyer (Bill to)',L+1,49);
   d.setFontSize(9);d.text(safe(inv.billing_name),L+1,55);
   d.setFont('helvetica','normal');d.setFontSize(8);
@@ -61,8 +61,6 @@ function pdf(inv,items,cfg){
   d.line(L,89,R,89);
   d.setFont('helvetica','bold');d.setFontSize(8);d.text('Station:',L+1,94);
   d.setFont('helvetica','italic');d.text(safe(inv.station),L+18,94);
-  d.setFont('helvetica','bold').text('Period:',119,94);
-  d.setFont('helvetica','normal').text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),136,94);
   d.line(L,98,R,98);
  };
 
