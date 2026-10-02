@@ -115,12 +115,13 @@ function pdf(inv,items,cfg){
 
   // Metadata is a narrow right-hand block in the reference. Keep labels and values
   // separated so the long invoice-period value never overlaps its label.
-  left('Invoice Period :',x[4],y[6]+4.8,7.3,true);
-  right(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[5],R,y[6]+4.8,6.5);
-  left('Invoice No :',x[4],y[7]+5.0,8.2,true);
-  right(inv.invoice_number,x[5],R,y[7]+5.0,7.5);
-  left('Dated :',x[4],y[8]+5.0,8.2,true);
-  right(fmtDate(inv.invoice_date),x[5],R,y[8]+5.0,7.5);
+  // Center each metadata label/value pair within its respective cell.
+  center('Invoice Period :',x[4],x[5],y[6]+rowH[6]/2+2.7,7.3,true);
+  center(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[5],R,y[6]+rowH[6]/2+2.7,6.5);
+  center('Invoice No :',x[4],x[5],y[7]+rowH[7]/2+2.7,8.2,true);
+  center(inv.invoice_number,x[5],R,y[7]+rowH[7]/2+2.7,7.5);
+  center('Dated :',x[4],x[5],y[8]+rowH[8]/2+2.7,8.2,true);
+  center(fmtDate(inv.invoice_date),x[5],R,y[8]+rowH[8]/2+2.7,7.5);
   left('Mode/Terms of Payment:',x[4],y[9]+5.0,7.2,false);
 
   // Service table A15:G18. The Excel template has exactly three service rows.
