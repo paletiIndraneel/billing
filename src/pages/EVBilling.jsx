@@ -160,7 +160,7 @@ function pdf(inv,items,cfg){
 
   d.setFillColor(...BLUE);d.rect(L+0.25,y[22],W-0.5,rowH[22],'F');
   d.line(L,y[22],R,y[22]);d.line(L,y[22]+rowH[22],R,y[22]+rowH[22]);
-  // Reference Total row: retain both column boundaries from the service table:
+  // Reference Total row: retain both service-table-aligned vertical boundaries:
   // GST Rate / Quantity and Quantity / Rate.
   d.line(x[3],y[22],x[3],y[22]+rowH[22]);
   d.line(x[4],y[22],x[4],y[22]+rowH[22]);
