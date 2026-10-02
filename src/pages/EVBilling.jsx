@@ -50,7 +50,7 @@ function pdf(inv,items,cfg){
   let yy=TOP;
   for(let r=1;r<=37;r++){y[r]=yy;yy+=rowH[r];}
   const bottom=y[37]+rowH[37];
-  const x=[L, L+11.2, L+66.0, L+86.8, L+109.5, L+138.8, L+152.7, R];
+  // Excel A:G column widths scaled to the 190 mm invoice frame.\n  const cw=[11,31,11.86,12.86,16.57,10.43,19], scale=W/cw.reduce((a,b)=>a+b,0), x=[L];\n  cw.forEach(w=>x.push(x[x.length-1]+w*scale));
   const line=()=>{d.setDrawColor(0);d.setLineWidth(.25);};
   const rect=(x1,y1,x2,y2)=>d.rect(x1,y1,x2-x1,y2-y1);
   const hline=(r)=>d.line(L,y[r]+rowH[r],R,y[r]+rowH[r]);
@@ -70,7 +70,7 @@ function pdf(inv,items,cfg){
   right('E-Mail: '+(inv.company_email||company.company_email||cfg?.email||'TRIARCGROUP9@GMAIL.COM'),L+95,R,y[5]+4.8,8);
 
   // Buyer / invoice metadata block A6:G14.
-  d.line(x[5],y[6],x[5],y[14]+rowH[14]);
+  d.line(x[4],y[6],x[4],y[14]+rowH[14]);
   left('Buyer (Bill to)',L,y[6]+5.0,9,true);
   left(inv.billing_name,L,y[7]+5.0,8.5);
   if(buyerAddr){
@@ -84,13 +84,13 @@ function pdf(inv,items,cfg){
 
   // Metadata is a narrow right-hand block in the reference. Keep labels and values
   // separated so the long invoice-period value never overlaps its label.
-  left('Invoice Period :',x[5],y[6]+4.8,7.3,true);
-  right(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[5]+19,R,y[6]+4.8,6.5);
-  left('Invoice No :',x[5],y[8]+5.0,8.2,true);
-  right(inv.invoice_number,x[6]-1,R,y[8]+5.0,7.5);
-  left('Dated :',x[5],y[9]+5.0,8.2,true);
-  right(fmtDate(inv.invoice_date),x[6]-1,R,y[9]+5.0,7.5);
-  left('Mode/Terms of Payment:',x[5],y[10]+5.0,7.2,false);
+  left('Invoice Period :',x[4],y[6]+4.8,7.3,true);
+  right(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[5],R,y[6]+4.8,6.5);
+  left('Invoice No :',x[4],y[8]+5.0,8.2,true);
+  right(inv.invoice_number,x[5],R,y[8]+5.0,7.5);
+  left('Dated :',x[4],y[9]+5.0,8.2,true);
+  right(fmtDate(inv.invoice_date),x[5],R,y[9]+5.0,7.5);
+  left('Mode/Terms of Payment:',x[4],y[10]+5.0,7.2,false);
 
   // Service table A15:G18. The Excel template has exactly three service rows.
   d.setFillColor(...BLUE);d.rect(L,y[15],W,rowH[15],'F');
@@ -137,7 +137,7 @@ function pdf(inv,items,cfg){
   d.setFillColor(...BLUE);d.rect(L,y[25],W,rowH[25],'F');
   center('Tax Analysis',L,R,y[25]+4.8,9,true);
   for(let r=26;r<=28;r++)hline(r);
-  const txCols=isIgst ? [L,L+42,L+82,L+115,L+152,R] : [L,L+34,L+67,L+96,L+124,L+151,R];
+  const txCols=isIgst ? [L,x[2],x[3],x[4],x[6],R] : [L,x[2],x[3],x[4],x[5],x[6],R];
   txCols.forEach(xx=>d.line(xx,y[26],xx,y[28]+rowH[28]));
   const txHeaders=isIgst?['HSN/SAC','Taxable Value','IGST Rate','IGST Amount','Total Tax Amount']:['HSN/SAC','Taxable Value','GST Rate','CGST','SGST','Total Tax Amount'];
   txHeaders.forEach((v,i)=>center(v,txCols[i],txCols[i+1],y[26]+5.0,7.0,true));
