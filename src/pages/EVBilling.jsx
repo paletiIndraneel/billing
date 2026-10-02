@@ -76,9 +76,12 @@ function pdf(inv,items,cfg){
 
   // Buyer / invoice metadata block A6:G14.
   d.line(x[4],y[6],x[4],y[14]+rowH[14]);
+  // Reference borders: box the three metadata rows and the Station row.
+  d.line(x[4],y[6],R,y[6]);
   d.line(x[4],y[6]+rowH[6],R,y[6]+rowH[6]);
   d.line(x[4],y[8]+rowH[8],R,y[8]+rowH[8]);
   d.line(x[4],y[9]+rowH[9],R,y[9]+rowH[9]);
+  d.line(L,y[14],R,y[14]);
   d.line(L,y[14]+rowH[14],R,y[14]+rowH[14]);
   left('Buyer (Bill to)',L,y[6]+5.0,9,true);
   left(inv.billing_name,L,y[7]+5.0,8.5);
