@@ -64,7 +64,10 @@ function pdf(inv,items,cfg){
   rect(L,TOP,R,bottom);
 
   // Header A1:G5
-  center('Tax Invoice',L,R,y[1]+6.8,12,true);
+  d.setTextColor(255,0,0); center('Tax Invoice',L,R,y[1]+6.8,12,true); d.setTextColor(0,0,0);
+  d.line(L,y[3]+rowH[3],R,y[3]+rowH[3]);
+  d.line(L,y[4]+rowH[4],R,y[4]+rowH[4]);
+  d.line(L,y[5]+rowH[5],R,y[5]+rowH[5]);
   center('M/s. '+(company.company_business_name||company.business_name||'TRIARC GROUP'),L,R,y[2]+5.2,13,true);
   center(addr,L+2,R-2,y[3]+7.0,7.4,false);
   center('GSTIN: '+(inv.company_gstin||company.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),L,R,y[4]+4.5,8.2,true);
@@ -73,6 +76,10 @@ function pdf(inv,items,cfg){
 
   // Buyer / invoice metadata block A6:G14.
   d.line(x[4],y[6],x[4],y[14]+rowH[14]);
+  d.line(x[4],y[6]+rowH[6],R,y[6]+rowH[6]);
+  d.line(x[4],y[8]+rowH[8],R,y[8]+rowH[8]);
+  d.line(x[4],y[9]+rowH[9],R,y[9]+rowH[9]);
+  d.line(L,y[14]+rowH[14],R,y[14]+rowH[14]);
   left('Buyer (Bill to)',L,y[6]+5.0,9,true);
   left(inv.billing_name,L,y[7]+5.0,8.5);
   if(buyerAddr){
