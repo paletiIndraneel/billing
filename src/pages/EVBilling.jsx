@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Plus, Trash2, RefreshCw, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../components/Toast';
 
