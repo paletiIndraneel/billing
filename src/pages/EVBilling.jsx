@@ -117,6 +117,8 @@ function pdf(inv,items,cfg){
 
   // Service table A15:G18. The Excel template has exactly three service rows.
   d.setFillColor(...BLUE);d.rect(L,y[15],W,rowH[15],'F');
+  // Top border of the service table header.
+  d.line(L,y[15],R,y[15]);
   for(let i=0;i<8;i++)d.line(x[i],y[15],x[i],y[18]+rowH[18]);
   for(let r=15;r<=18;r++)hline(r);
   const headers=['Sl No.','Description of Services','GST Rate','Quantity (kWh)','Rate (Rs.)','per','Amount (Rs.)'];
