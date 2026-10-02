@@ -23,7 +23,7 @@ function calc(items,type){
 }
 function pdf(inv,items,cfg){
  const d=new jsPDF({unit:'mm',format:'a4'}),L=10,T=5,W=190,R=L+W;
- const BLUE=[190,225,236];
+ const BLUE=[182,221,232];
  const money2=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
  const money4=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:4,maximumFractionDigits:4});
  const safe=(v,f='')=>v===null||v===undefined||v===''?f:String(v);
@@ -37,19 +37,19 @@ function pdf(inv,items,cfg){
  const border=()=>{d.setDrawColor(0);d.setLineWidth(.25);d.rect(L,T,W,PAGE_BOTTOM-T);};
  const header=()=>{
   d.setTextColor(0,0,0);d.setDrawColor(0);d.setLineWidth(.25);
-  d.setFont('helvetica','bold');d.setFontSize(9);d.text('Tax Invoice',105,11,{align:'center'});
-  d.setFontSize(15);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,19,{align:'center'});
-  d.setFont('helvetica','normal');d.setFontSize(7.3);
+  d.setFont('helvetica','bold');d.setFontSize(14);d.setTextColor(255,0,0);d.text('Tax Invoice',105,11,{align:'center'});
+  d.setTextColor(0,0,0);d.setFontSize(16);d.text('M/s. '+(inv.company_business_name||cfg?.business_name||'TRIARC GROUP'),105,19,{align:'center'});
+  d.setFont('helvetica','normal');d.setFontSize(8.5);
   if(addr)d.text(addr,105,25,{align:'center',maxWidth:184});
-  d.setFont('helvetica','bold');d.setFontSize(7.3);d.text('GSTIN: '+(inv.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),105,32,{align:'center'});
+  d.setFont('helvetica','bold');d.setFontSize(9);d.text('GSTIN: '+(inv.company_gstin||cfg?.gstin||'36AAYFT2036P1ZB'),105,32,{align:'center'});
   d.line(L,37,R,37);
-  d.setFont('helvetica','normal');d.setFontSize(7.2);
+  d.setFont('helvetica','normal');d.setFontSize(8);
   d.text('Contact: '+(inv.company_phone||cfg?.phone||'+91 7993356677'),L+1,41);
   if(inv.company_email||cfg?.email)d.text('E-Mail: '+(inv.company_email||cfg.email),L+101,41);
   d.line(L,44,R,44);d.line(119,44,119,89);
-  d.setFont('helvetica','bold');d.text('Buyer (Bill to)',L+1,49);
-  d.setFontSize(8.2);d.text(safe(inv.billing_name),L+1,55);
-  d.setFont('helvetica','normal');d.setFontSize(7.1);
+  d.setFont('helvetica','bold');d.setFontSize(9);d.text('Buyer (Bill to)',L+1,49);
+  d.setFontSize(9);d.text(safe(inv.billing_name),L+1,55);
+  d.setFont('helvetica','normal');d.setFontSize(8);
   if(buyerAddr)d.text(buyerAddr,L+1,60,{maxWidth:103});
   if(inv.billing_state)d.text('State Name: '+inv.billing_state+'  Code: '+safe(inv.billing_state_code||stateCode),L+1,76);
   if(inv.billing_gstin)d.text('GSTIN/UIN: '+inv.billing_gstin,L+1,82);
@@ -59,8 +59,10 @@ function pdf(inv,items,cfg){
   d.setFont('helvetica','bold');d.text('Dated :',120,61);d.setFont('helvetica','normal');d.text(fmtDate(inv.invoice_date),141,61);
   d.setFont('helvetica','bold');d.text('Mode/Terms of Payment:',120,68);
   d.line(L,89,R,89);
-  d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Station:',L+1,94);
+  d.setFont('helvetica','bold');d.setFontSize(8);d.text('Station:',L+1,94);
   d.setFont('helvetica','italic');d.text(safe(inv.station),L+18,94);
+  d.setFont('helvetica','bold').text('Period:',119,94);
+  d.setFont('helvetica','normal').text(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),136,94);
   d.line(L,98,R,98);
  };
 
@@ -125,14 +127,14 @@ function pdf(inv,items,cfg){
  d.text('Rs. '+money2(inv.grand_total),R-1,y+4.8,{align:'right'});
  d.line(L,y,R,y);d.line(L,y+7,R,y+7);d.line(amountX,y,amountX,y+7);
 
- // Amount in words.
- y+=10;
- d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Amount Chargeable (in words):',L+1,y);
- d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+58,y,{maxWidth:130});
- y+=6;d.line(L,y,R,y);
+ // Amount in words — kept on its own row, immediately below Total, matching the reference.
+ y+=14;
+ d.setFont('helvetica','bold');d.setFontSize(9);
+ d.text('Amount Chargeable (in words):',L+1,y);
+ d.setFont('helvetica','bold');d.text(words(inv.grand_total)+' (E. & O.E.)',L+43,y,{maxWidth:146});
 
- // Tax analysis heading.
- y+=5;d.setFillColor(...BLUE);d.rect(L,y-2,W,6,'F');
+ // Tax analysis heading directly follows the amount-in-words row.
+ y+=6;d.setFillColor(...BLUE);d.rect(L,y-2,W,6,'F');
  d.setTextColor(0,0,0);d.setFont('helvetica','bold');d.text('Tax Analysis',105,y+2,{align:'center'});y+=5;
 
  const groups={};
@@ -172,11 +174,11 @@ function pdf(inv,items,cfg){
 
  y=d.lastAutoTable.finalY+5;
  if(y+18>PAGE_BOTTOM-8){d.addPage();border();y=15;}
- d.setFont('helvetica','bold');d.setFontSize(7.5);d.text('Tax Amount (in words):',L+1,y);
- d.setFont('helvetica','normal');d.text(words(tax),L+39,y,{maxWidth:136});
+ d.setFont('helvetica','bold');d.setFontSize(9);d.text('Tax Amount (in words):',L+1,y);
+ d.setFont('helvetica','bold');d.text(words(tax),L+40,y,{maxWidth:145});
  y+=5;d.line(L,y,R,y);
- y+=5;d.setFont('helvetica','bold');d.text('Declaration',L+1,y);
- d.setFont('helvetica','italic');d.setFontSize(7.1);
+ y+=5;d.setFont('helvetica','bold');d.setFontSize(9);d.text('Declaration',L+1,y);
+ d.setFont('helvetica','italic');d.setFontSize(8);
  d.text('We declare that this invoice shows the actual price of the services described and that all particulars are true and correct.',L+1,y+5,{maxWidth:165});
 
  // Fixed signature zone on the same page as declaration when possible.
