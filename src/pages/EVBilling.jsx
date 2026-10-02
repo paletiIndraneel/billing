@@ -160,10 +160,11 @@ function pdf(inv,items,cfg){
 
   d.setFillColor(...BLUE);d.rect(L+0.25,y[22],W-0.5,rowH[22],'F');
   d.line(L,y[22],R,y[22]);d.line(L,y[22]+rowH[22],R,y[22]+rowH[22]);
-  // Reference Total row: the divider after Total quantity aligns
-  // exactly with the Quantity (kWh) / Rate (Rs.) divider in the service table.
+  // Reference Total row: retain both column boundaries from the service table:
+  // GST Rate / Quantity and Quantity / Rate.
+  d.line(x[3],y[22],x[3],y[22]+rowH[22]);
   d.line(x[4],y[22],x[4],y[22]+rowH[22]);
-  center('Total',L,x[4],y[22]+5.3,8,true);
+  center('Total',L,x[3],y[22]+5.3,8,true);
   right(money4(rows.reduce((n,r)=>n+(+r.quantity||0),0)),x[3],x[4],y[22]+5.3,7.5,true);
   right('Rs. '+money2(inv.grand_total),x[4],R,y[22]+5.3,8,true);
 
