@@ -168,9 +168,15 @@ function pdf(inv,items,cfg){
   left('Amount Chargeable (in words): '+words(inv.grand_total)+' (E. & O.E.)',L,y[23]+6.2,7.5,true,R-L-2);
 
   // Tax analysis A25:G29.
-  d.setFillColor(...BLUE);d.rect(L+0.25,y[25]+0.25,W-0.5,rowH[25]-0.5,'F');
-  d.setDrawColor(0);d.setLineWidth(0.5);d.line(L,y[25],R,y[25]);d.line(L,y[25]+rowH[25],R,y[25]+rowH[25]);line();
-  center('Tax Analysis',L,R,y[25]+3.6,8.5,true);
+  // Keep the Tax Analysis blue fill strictly inside the outer black frame.
+  d.setFillColor(...BLUE);
+  d.rect(L+0.25,y[25]+0.25,W-0.5,rowH[25]-0.5,'F');
+  d.setDrawColor(0);
+  d.setLineWidth(0.5);
+  d.line(L,y[25],R,y[25]);
+  d.line(L,y[25]+rowH[25],R,y[25]+rowH[25]);
+  line();
+  center('Tax Analysis',L,R,y[25]+4.8,9,true);
   for(let r=26;r<=28;r++)hline(r);
   const txCols=isIgst ? [L,x[2],x[3],x[4],x[6],R] : [L,x[2],x[3],x[4],x[5],x[6],R];
   txCols.forEach(xx=>d.line(xx,y[26],xx,y[28]+rowH[28]));
