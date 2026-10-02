@@ -150,7 +150,8 @@ function pdf(inv,items,cfg){
   // through the label area; only the amount/value column is divided.
   for(let r=19;r<=21;r++){d.line(x[6],y[r],R,y[r]);}
   d.line(x[6],y[21]+rowH[21],R,y[21]+rowH[21]);
-  // Continue the summary label/amount divider through the Total row.
+  // Continue the summary divider from Rounding Off through the Total
+  // amount row, ending at the Rs. grand-total boundary.
   d.line(x[6],y[19],x[6],y[22]+rowH[22]);
   [19,20,21].forEach(r=>right(
     r===19?'Sub Total (Taxable Value)':r===20?(isIgst?'IGST Output A/c @ '+(rows[0]?.gst_rate||0)+'%':'CGST + SGST'):'Rounding Off',
