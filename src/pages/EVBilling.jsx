@@ -124,7 +124,7 @@ function pdf(inv,items,cfg){
   left('Mode/Terms of Payment:',x[4],y[9]+5.0,7.2,false);
 
   // Service table A15:G18. The Excel template has exactly three service rows.
-  d.setFillColor(...BLUE);d.rect(L,y[15],W,rowH[15],'F');
+  d.setFillColor(...BLUE);d.rect(L+0.25,y[15],W-0.5,rowH[15],'F');
   // Top border of the service table header.
   d.line(L,y[15],R,y[15]);
   for(let i=0;i<8;i++)d.line(x[i],y[15],x[i],y[18]+rowH[18]);
@@ -158,7 +158,7 @@ function pdf(inv,items,cfg){
   right(money2(isIgst?inv.igst_amount:(Number(inv.cgst_amount||0)+Number(inv.sgst_amount||0))),x[6],R,y[20]+4.7,7.5);
   right(money2(inv.round_off),x[6],R,y[21]+4.7,7.5);
 
-  d.setFillColor(...BLUE);d.rect(L,y[22],W,rowH[22],'F');
+  d.setFillColor(...BLUE);d.rect(L+0.25,y[22],W-0.5,rowH[22],'F');
   d.line(L,y[22],R,y[22]);d.line(L,y[22]+rowH[22],R,y[22]+rowH[22]);
   d.line(x[4],y[22],x[4],y[22]+rowH[22]);d.line(x[6],y[22],x[6],y[22]+rowH[22]);
   center('Total',L,x[4],y[22]+5.3,8,true);
@@ -168,7 +168,7 @@ function pdf(inv,items,cfg){
   left('Amount Chargeable (in words): '+words(inv.grand_total)+' (E. & O.E.)',L,y[23]+6.2,7.5,true,R-L-2);
 
   // Tax analysis A25:G29.
-  d.setFillColor(...BLUE);d.rect(L,y[25],W,rowH[25],'F');
+  d.setFillColor(...BLUE);d.rect(L+0.25,y[25],W-0.5,rowH[25],'F');
   center('Tax Analysis',L,R,y[25]+4.8,9,true);
   for(let r=26;r<=28;r++)hline(r);
   const txCols=isIgst ? [L,x[2],x[3],x[4],x[6],R] : [L,x[2],x[3],x[4],x[5],x[6],R];
