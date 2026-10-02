@@ -131,7 +131,7 @@ function pdf(inv,items,cfg){
  y+=14;
  d.setFont('helvetica','bold');d.setFontSize(9);
  d.text('Amount Chargeable (in words):',L+1,y);
- d.setFont('helvetica','bold');d.text(words(inv.grand_total)+' (E. & O.E.)',L+43,y,{maxWidth:146});
+ d.setFont('helvetica','normal');d.text(words(inv.grand_total)+' (E. & O.E.)',L+72,y,{maxWidth:116});
 
  // Tax analysis heading directly follows the amount-in-words row.
  y+=6;d.setFillColor(...BLUE);d.rect(L,y-2,W,6,'F');
