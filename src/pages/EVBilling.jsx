@@ -97,21 +97,20 @@ function pdf(inv,items,cfg){
  let y=d.lastAutoTable.finalY;
  const subtotal=Number(inv.taxable_amount||0),round=Number(inv.round_off||0);
  const tax=Number(inv.total_tax||0),qty=items.reduce((n,x)=>n+(+x.quantity||0),0);
- const amountX=R-34.5;
+ const amountX=169.5;
 
  // If the service table reached a new page, keep the summary together.
  if(y+31>PAGE_BOTTOM-4){d.addPage();border();y=10;}
  d.setDrawColor(0);d.setTextColor(0,0,0);d.setLineWidth(.25);
 
- // Totals block — explicit grid lines matching the Excel reference.
- d.setDrawColor(0);d.setLineWidth(.35);
- // Outer top/bottom lines and the vertical amount column.
- d.line(L,y,R,y);
- d.line(L,y+24,R,y+24);
+ // Totals block — match the supplied Excel reference.
+ d.setDrawColor(0);d.setLineWidth(.25);
+ // The subtotal, GST and rounding rows are divided only within the right summary area.
+ d.line(amountX,y,R,y);
+ d.line(amountX,y+8,R,y+8);
+ d.line(amountX,y+16,R,y+16);
+ d.line(amountX,y+24,R,y+24);
  d.line(amountX,y,amountX,y+24);
- // Horizontal separators between Sub Total, GST and Rounding Off.
- d.line(L,y+8,R,y+8);
- d.line(L,y+16,R,y+16);
  d.setFont('helvetica','bold');d.setFontSize(7.5);
  d.text('Sub Total (Taxable Value)',amountX-2,y+5.2,{align:'right'});
  d.text(money2(subtotal),R-1,y+5.2,{align:'right'});
@@ -120,17 +119,19 @@ function pdf(inv,items,cfg){
  d.text(money2(isIgst?inv.igst_amount:(Number(inv.cgst_amount||0)+Number(inv.sgst_amount||0))),R-1,y+13.2,{align:'right'});
  d.text('Rounding Off',amountX-2,y+21.2,{align:'right'});
  d.text(money2(round),R-1,y+21.2,{align:'right'});
- // Restore the normal PDF line weight for following sections.
- d.setLineWidth(.25);
 
  // Total row.
  y+=24;
  d.setFillColor(...BLUE);d.rect(L,y,W,7,'F');
  d.setTextColor(0,0,0);d.setFont('helvetica','bold');d.setFontSize(7.5);
- d.text('Total',L+39,y+4.8);
- d.text(money4(qty),L+101,y+4.8,{align:'right'});
+ d.text('Total',55.6,y+4.8,{align:'center'});
+ d.text(money4(qty),113.3,y+4.8,{align:'center'});
  d.text('Rs. '+money2(inv.grand_total),R-1,y+4.8,{align:'right'});
- d.line(L,y,R,y);d.line(L,y+7,R,y+7);d.line(amountX,y,amountX,y+7);
+ // Total row divisions match the reference: merged label, quantity, rate/unit, amount.
+ d.line(L,y,R,y);d.line(L,y+7,R,y+7);
+ d.line(101.2,y,101.2,y+7);
+ d.line(125.3,y,125.3,y+7);
+ d.line(169.5,y,169.5,y+7);
 
  // Amount in words — kept on its own row, immediately below Total, matching the reference.
  y+=14;
