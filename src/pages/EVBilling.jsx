@@ -76,15 +76,15 @@ function pdf(inv,items,cfg){
 
   // Buyer / invoice metadata block A6:G14.
   d.line(x[4],y[6],x[4],y[14]+rowH[14]);
-  // Vertical divider inside the right-side invoice metadata block.
-  // The Mode/Terms of Payment row is a single full-width field; stop
-  // the label/value divider at its top edge.
-  d.line(x[5],y[6],x[5],y[10]);
-  // Reference borders: box the three metadata rows and the Station row.
+  // Invoice metadata rows are consecutive, matching the reference.
+  // Invoice No. and Dated use the same row height as Invoice Period.
+  d.line(x[5],y[6],x[5],y[9]);
+  // Reference borders: Invoice Period, Invoice No., and Dated are
+  // consecutive rows; Mode/Terms is one full-width field below them.
   d.line(x[4],y[6],R,y[6]);
-  d.line(x[4],y[6]+rowH[6],R,y[6]+rowH[6]);
-  d.line(x[4],y[8]+rowH[8],R,y[8]+rowH[8]);
-  d.line(x[4],y[9]+rowH[9],R,y[9]+rowH[9]);
+  d.line(x[4],y[7],R,y[7]);
+  d.line(x[4],y[8],R,y[8]);
+  d.line(x[4],y[9],R,y[9]);
   d.line(L,y[14],R,y[14]);
   d.line(L,y[14]+rowH[14],R,y[14]+rowH[14]);
   left('Buyer (Bill to)',L,y[6]+5.0,9,true);
@@ -113,11 +113,11 @@ function pdf(inv,items,cfg){
   // separated so the long invoice-period value never overlaps its label.
   left('Invoice Period :',x[4],y[6]+4.8,7.3,true);
   right(fmtDate(inv.billing_period_from)+' - '+fmtDate(inv.billing_period_to),x[5],R,y[6]+4.8,6.5);
-  left('Invoice No :',x[4],y[8]+5.0,8.2,true);
-  right(inv.invoice_number,x[5],R,y[8]+5.0,7.5);
-  left('Dated :',x[4],y[9]+5.0,8.2,true);
-  right(fmtDate(inv.invoice_date),x[5],R,y[9]+5.0,7.5);
-  left('Mode/Terms of Payment:',x[4],y[10]+5.0,7.2,false);
+  left('Invoice No :',x[4],y[7]+5.0,8.2,true);
+  right(inv.invoice_number,x[5],R,y[7]+5.0,7.5);
+  left('Dated :',x[4],y[8]+5.0,8.2,true);
+  right(fmtDate(inv.invoice_date),x[5],R,y[8]+5.0,7.5);
+  left('Mode/Terms of Payment:',x[4],y[9]+5.0,7.2,false);
 
   // Service table A15:G18. The Excel template has exactly three service rows.
   d.setFillColor(...BLUE);d.rect(L,y[15],W,rowH[15],'F');
