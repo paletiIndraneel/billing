@@ -76,6 +76,8 @@ function pdf(inv,items,cfg){
 
   // Buyer / invoice metadata block A6:G14.
   d.line(x[4],y[6],x[4],y[14]+rowH[14]);
+  // Vertical divider inside the right-side invoice metadata block.
+  d.line(x[5],y[6],x[5],y[10]+rowH[10]);
   // Reference borders: box the three metadata rows and the Station row.
   d.line(x[4],y[6],R,y[6]);
   d.line(x[4],y[6]+rowH[6],R,y[6]+rowH[6]);
